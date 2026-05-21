@@ -1,5 +1,9 @@
 # builtup-mcp
 
+[![Explore the interactive map](docs/assets/banner.jpg)](https://cgiovando.github.io/builtup-mcp/)
+
+*Detected built-up gain (yellow = confirmed by Google Open Buildings, red = detected only, cyan = reference only) over an evidence-selected hotspot in Lagos, 2018-2023. [Explore all four cities interactively.](https://cgiovando.github.io/builtup-mcp/)*
+
 An on-demand [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that
 detects **built-up change** (where built-up area has increased or decreased) over small,
 user-defined bounding boxes, at higher temporal cadence than published epoch products

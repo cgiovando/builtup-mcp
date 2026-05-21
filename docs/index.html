@@ -39,6 +39,7 @@
   .toggle input { accent-color: #2f6fbf; }
   .swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block; border: 1px solid #00000040; }
   .legend-note { color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 6px; }
+  .muted { color: var(--muted); }
   .metrics { font-size: 12px; line-height: 1.7; }
   .metrics b { color: #fff; }
   .pill { display: inline-block; background: var(--panel2); border-radius: 5px; padding: 1px 6px; }
@@ -69,8 +70,17 @@
   </div>
 
   <div class="section">
+    <h2>Optical reference (Sentinel-2)</h2>
+    <label class="toggle"><input type="radio" name="optical" value="off" checked> Off (basemap only)</label>
+    <label class="toggle"><input type="radio" name="optical" value="before"> Before <span id="opt-before-date" class="muted"></span></label>
+    <label class="toggle"><input type="radio" name="optical" value="after"> After <span id="opt-after-date" class="muted"></span></label>
+    <div class="legend-note">True-color Sentinel-2 (10 m), least-cloudy scene per epoch.</div>
+  </div>
+
+  <div class="section">
     <h2>Basemap</h2>
     <select id="basemap"></select>
+    <div class="legend-note" style="margin-top:8px;">High-res context: <a id="ge-link" href="#" target="_blank" rel="noopener">open this AOI in Google Earth</a> (use its historical slider).</div>
   </div>
 
   <div class="section">
@@ -125,12 +135,17 @@ map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-right");
 const meta = {};   // region -> meta json
 let current = REGIONS[0];
 
+function bottomDataLayer() {
+  // Keep basemaps beneath the optical reference, points, and AOI outline.
+  return ["opt-before", "opt-after", "pts"].find(id => map.getLayer(id));
+}
+
 function setBasemap(name) {
   // Remove existing basemap raster layers/sources, add the chosen one(s).
   ["bm-esri-imagery", "bm-esri-base", "bm-extra"].forEach(id => { if (map.getLayer(id)) map.removeLayer(id); });
   ["esri-imagery", "esri-base", "extra"].forEach(id => { if (map.getSource(id)) map.removeSource(id); });
   const cfg = BASEMAPS[name];
-  const beforeId = map.getLayer("pts") ? "pts" : undefined;
+  const beforeId = bottomDataLayer();
   if (cfg.base) {
     // imagery underneath + label overlay on top
     const b = BASEMAPS[cfg.base];
@@ -155,6 +170,39 @@ function updateFilters() {
   map.setFilter("pts", ["in", ["get", "class"], ["literal", active.length ? active : ["__none__"]]]);
   const aoiOn = document.getElementById("t-aoi").checked;
   if (map.getLayer("aoi-line")) map.setLayoutProperty("aoi-line", "visibility", aoiOn ? "visible" : "none");
+}
+
+function applyOptical() {
+  const sel = (document.querySelector("input[name=optical]:checked") || {}).value || "off";
+  ["before", "after"].forEach(ep => {
+    if (map.getLayer("opt-" + ep))
+      map.setLayoutProperty("opt-" + ep, "visibility", sel === ep ? "visible" : "none");
+  });
+}
+
+function setOptical(region) {
+  const img = (meta[region] || {}).imagery || {};
+  ["before", "after"].forEach(ep => {
+    const id = "opt-" + ep;
+    const radio = document.querySelector(`input[name=optical][value=${ep}]`);
+    const dateEl = document.getElementById(`opt-${ep}-date`);
+    const def = img[ep];
+    if (!def) {
+      radio.disabled = true; dateEl.textContent = "(n/a)";
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+      return;
+    }
+    radio.disabled = false; dateEl.textContent = "(" + def.date + ")";
+    if (map.getSource(id)) {
+      map.getSource(id).updateImage({ url: def.png, coordinates: def.coordinates });
+    } else {
+      map.addSource(id, { type: "image", url: def.png, coordinates: def.coordinates });
+      map.addLayer({ id, type: "raster", source: id, layout: { visibility: "none" },
+        paint: { "raster-opacity": 1, "raster-fade-duration": 0 } },
+        map.getLayer("pts") ? "pts" : undefined);
+    }
+  });
+  applyOptical();
 }
 
 function renderMetrics(m) {
@@ -202,7 +250,14 @@ async function loadRegion(region) {
     map.addSource("aoi", { type: "geojson", data: aoiGeo });
     map.addLayer({ id: "aoi-line", type: "line", source: "aoi", paint: { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [2,1.5] } });
   }
+  setOptical(region);
   updateFilters();
+
+  // Google Earth deep link to the AOI center.
+  const [clon, clat] = m.center;
+  document.getElementById("ge-link").href =
+    `https://earth.google.com/web/@${clat},${clon},300a,4500d,35y,0h,0t,0r`;
+
   map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 800 });
 }
 
@@ -237,6 +292,8 @@ map.on("load", async () => {
 
   ["agreement", "gain_only", "ob_new", "aoi"].forEach(c =>
     document.getElementById("t-" + c).addEventListener("change", updateFilters));
+  document.querySelectorAll("input[name=optical]").forEach(r =>
+    r.addEventListener("change", applyOptical));
 
   const CLASS_LABEL = { agreement: "Agreement (detected &amp; reference)", gain_only: "Detected only", ob_new: "Reference only (undetected)" };
   map.on("click", "pts", (e) => {

@@ -1,0 +1,29 @@
+{
+  "id": "greater_dhaka",
+  "name": "Greater Dhaka, Bangladesh",
+  "bounds": [
+    90.35655121766656,
+    23.862067167238344,
+    90.37653968039682,
+    23.880448772085
+  ],
+  "center": [
+    90.36654544903169,
+    23.87125796966167
+  ],
+  "years": [
+    2018,
+    2023
+  ],
+  "metrics": {
+    "gain_px": 880,
+    "precision_ob_new": 73.1,
+    "recall_ob_new": 14.1,
+    "enrichment_ob_new": 3.5
+  },
+  "counts": {
+    "agreement": 643,
+    "gain_only": 237,
+    "ob_new": 3010
+  }
+}

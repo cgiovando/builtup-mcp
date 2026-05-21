@@ -1,0 +1,29 @@
+{
+  "id": "lagos_lekki",
+  "name": "Lagos (Lekki), Nigeria",
+  "bounds": [
+    3.5371974828967754,
+    6.429649453066547,
+    3.5553028156318423,
+    6.4477603104643295
+  ],
+  "center": [
+    3.546250149264309,
+    6.438704881765439
+  ],
+  "years": [
+    2018,
+    2023
+  ],
+  "metrics": {
+    "gain_px": 4364,
+    "precision_ob_new": 81.5,
+    "recall_ob_new": 44.1,
+    "enrichment_ob_new": 1.9
+  },
+  "counts": {
+    "agreement": 3556,
+    "gain_only": 808,
+    "ob_new": 4557
+  }
+}

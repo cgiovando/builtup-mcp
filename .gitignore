@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Test / tool caches
+.pytest_cache/
+
+# Project outputs
+/tmp/builtup-mcp/
+
+# Virtual environments
+.venv
+
+outputs/
+
+# macOS
+.DS_Store

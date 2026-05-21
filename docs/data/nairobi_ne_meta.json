@@ -1,0 +1,29 @@
+{
+  "id": "nairobi_ne",
+  "name": "Nairobi NE, Kenya",
+  "bounds": [
+    36.903322261961506,
+    -1.1444357504383222,
+    36.921300226933205,
+    -1.126340224470028
+  ],
+  "center": [
+    36.91231124444735,
+    -1.135387987454175
+  ],
+  "years": [
+    2018,
+    2023
+  ],
+  "metrics": {
+    "gain_px": 558,
+    "precision_ob_new": 33.7,
+    "recall_ob_new": 9.0,
+    "enrichment_ob_new": 4.1
+  },
+  "counts": {
+    "agreement": 188,
+    "gain_only": 370,
+    "ob_new": 1761
+  }
+}

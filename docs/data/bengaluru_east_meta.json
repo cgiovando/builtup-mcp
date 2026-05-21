@@ -1,0 +1,29 @@
+{
+  "id": "bengaluru_east",
+  "name": "Bengaluru East, India",
+  "bounds": [
+    77.70169344980978,
+    12.971248948891407,
+    77.72031031025502,
+    12.989506186895024
+  ],
+  "center": [
+    77.7110018800324,
+    12.980377567893216
+  ],
+  "years": [
+    2018,
+    2023
+  ],
+  "metrics": {
+    "gain_px": 1092,
+    "precision_ob_new": 38.8,
+    "recall_ob_new": 13.2,
+    "enrichment_ob_new": 2.3
+  },
+  "counts": {
+    "agreement": 424,
+    "gain_only": 668,
+    "ob_new": 2261
+  }
+}

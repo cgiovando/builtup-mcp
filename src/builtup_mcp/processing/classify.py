@@ -80,6 +80,11 @@ def weak_labels(frac: np.ndarray, resolution_m: float) -> np.ndarray:
     return labels
 
 
+def far_from_footprints(frac: np.ndarray, resolution_m: float, buffer_m: float) -> np.ndarray:
+    """Pixels farther than ``buffer_m`` from any footprint."""
+    return ndimage.distance_transform_edt(frac <= 0) * resolution_m > buffer_m
+
+
 def _blocks(grid: Grid) -> np.ndarray:
     """Spatial block id per pixel, for held-out evaluation."""
     side = max(1, int(round(config.HOLDOUT_BLOCK_M / grid.resolution_m)))
@@ -117,6 +122,7 @@ def train_models(
     labels: np.ndarray,
     label_date: str | None,
     *,
+    far_mask: np.ndarray | None = None,
     seed: int = 0,
 ) -> TrainedModels:
     """Fit fused / optical / SAR models on samples pooled across windows.
@@ -141,6 +147,7 @@ def train_models(
     # footprint" no longer means "not built" (that is the change being detected).
     neg_until = (ld + timedelta(days=int(365.25 * config.NEGATIVE_LOOKAHEAD_YEARS))).isoformat() if ld else None
     flat = labels.ravel()
+    far = far_mask if far_mask is not None else np.zeros(labels.shape, dtype=bool)
 
     for kind, names in MODEL_FEATURES.items():
         cands = [c for c in composites if feature_stack(c, names) is not None]
@@ -156,7 +163,11 @@ def train_models(
             if pos_from and comp.window[1] < pos_from:
                 pos = pos[:0]
             if neg_until and comp.window[0] > neg_until:
-                neg = neg[:0]
+                # Windows after mapping still need negatives, or the model never
+                # sees post-mapping radiometry for bare ground (new sensors, wet
+                # years) and calls it built. Keep only negatives far from any
+                # footprint, where new settlement adjacent to the town is unlikely.
+                neg = neg[far.ravel()[neg]]
             idx = np.concatenate([_sample(pos, per_window, rng), _sample(neg, per_window, rng)])
             Xs.append(X_all[idx])
             ys.append(flat[idx])

@@ -162,7 +162,10 @@ def run_city_request(
     frac = building_fraction(footprints, grid)
     labels = weak_labels(frac, grid.resolution_m)
     labels[~aoi] = -1
-    models = train_models(comps, labels, label_date)
+    from .processing.classify import far_from_footprints
+
+    far = far_from_footprints(frac, grid.resolution_m, config.LATE_NEGATIVE_BUFFER_M) & aoi
+    models = train_models(comps, labels, label_date, far_mask=far)
     if not models.models:
         raise RuntimeError("Too few footprint labels in the AOI to train a model.")
     log(f"  models: {list(models.models)}; held-out: {models.metrics}")

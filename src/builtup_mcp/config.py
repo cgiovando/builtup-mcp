@@ -88,7 +88,14 @@ LABEL_POS_FRACTION: float = 0.25  # >= this building cover in a 10 m pixel = bui
 LABEL_NEG_BUFFER_M: float = 40.0  # negatives must be this far from any footprint
 LABEL_MAX_PER_CLASS: int = 60000  # per class, split across pooled windows
 POSITIVE_LOOKBACK_YEARS: float = 3.0
-NEGATIVE_LOOKAHEAD_YEARS: float = 1.0
+# Negatives after the label date are noisy (post-mapping growth is labelled "not
+# built"), but dropping or thinning them is worse: the model then never sees
+# post-mapping radiometry for bare ground. On Malakal (labels median 2022) a
+# 1-year cut-off with a 250 m late buffer gave 284 ha of new built-up against
+# 148 ha with all windows, and lower agreement with WSF Tracker (F1 0.16 vs
+# 0.21). Default: negatives from every window. Lower this to test the trade-off.
+NEGATIVE_LOOKAHEAD_YEARS: float = 100.0
+LATE_NEGATIVE_BUFFER_M: float = 250.0  # applies only within NEGATIVE_LOOKAHEAD_YEARS
 MIN_LABELS_PER_CLASS: int = 300
 # Time-series state thresholds on built-up probability (hysteresis).
 PROB_BUILT: float = 0.6

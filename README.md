@@ -16,7 +16,7 @@ Annual and static global layers describe cities as they were one to eight years 
 
 ## Try it
 
-- **Explorer:** [cgiovando.github.io/builtup-mcp](https://cgiovando.github.io/builtup-mcp/) shows Malakal, Juba and Kigali with a season slider, static-layer overlays and neighbourhood statistics.
+- **Explorer:** [cgiovando.github.io/builtup-mcp](https://cgiovando.github.io/builtup-mcp/) shows Malakal, Renk, Juba and Kigali with a season slider, static-layer overlays and neighbourhood statistics.
 - **v0.1 validation map:** [cgiovando.github.io/builtup-mcp/v0.1](https://cgiovando.github.io/builtup-mcp/v0.1/) has the original four-city comparison with Google Open Buildings.
 
 [![The explorer](docs/assets/explorer.jpg)](https://cgiovando.github.io/builtup-mcp/)
@@ -69,12 +69,13 @@ The same capabilities are exposed as [Model Context Protocol](https://modelconte
 
 > **"Which cities grew fastest?"** calls `compare_products`
 > ```text
+> - Renk: built-up 846.7 -> 1114.9 ha (2019-2026), 4.0%/yr, new 268.2 ha
 > - Malakal: built-up 760.2 -> 908.3 ha (2019-2026), 2.6%/yr, new 148.1 ha
 > - Juba: built-up 4103.4 -> 4723.5 ha (2019-2026), 2.0%/yr, new 620.1 ha
 > - Kigali: built-up 4288.7 -> 4549.1 ha (2019-2026), 0.8%/yr, new 260.4 ha
 > ```
 
-> **"Can we do Renk next? What data is there?"** calls `plan_city_request`
+> **"What data is there for Renk?"** calls `plan_city_request` (run before the Renk product existed)
 > ```text
 > Renk: 77.1 sq km bbox, 6 windows.
 > - 2022 season (2021-12-01..2022-03-31): Sentinel-2 60 scenes, Sentinel-1 2 scenes
@@ -132,13 +133,15 @@ products/
 
 ## Results so far
 
-| | Malakal | Juba | Kigali |
-| --- | --- | --- | --- |
-| Area, season | 66 sq km, Dec-Mar | 66 sq km, Dec-Mar | 69 sq km, Jun-Aug |
-| Built-up, 2019 to 2026 (ha) | 760 to 908 | 4,103 to 4,724 | 4,289 to 4,549 |
-| New built-up, confirmed (ha) | 148 | 620 | 260 |
-| Agreement with WSF Tracker on built-up extent (F1) | 0.76 | 0.97 | 0.96 |
-| Agreement with WSF Tracker on which pixels are new (F1) | 0.21 | 0.42 | 0.49 |
+| | Malakal | Renk | Juba | Kigali |
+| --- | --- | --- | --- | --- |
+| Area, season | 66 sq km, Dec-Mar | 77 sq km, Dec-Mar | 66 sq km, Dec-Mar | 69 sq km, Jun-Aug |
+| Built-up, 2019 to 2026 (ha) | 760 to 908 | 847 to 1,115 | 4,103 to 4,724 | 4,289 to 4,549 |
+| New built-up, confirmed (ha) | 148 | 268 | 620 | 260 |
+| Agreement with WSF Tracker on built-up extent (F1) | 0.76 | 0.88 | 0.97 | 0.96 |
+| Agreement with WSF Tracker on which pixels are new (F1) | 0.21 | 0.36 | 0.42 | 0.49 |
+
+In Renk, the border town where more than 800,000 people crossed from Sudan from April 2023 ([REACH, July 2025](https://repository.impact-initiatives.org/document/repository/8d39fa52/REACH_SSD_Brief_Renk-Emergency-Assessment_July-2025.pdf)), two-thirds of the new built-up first appears in the 2024-2026 dry seasons.
 
 The two products agree on where the towns are and on the trend of growth, but much less on which pixels are new. In Malakal, image checks found errors on both sides. That is why a reference sample from very-high-resolution imagery is the next step, not a claim that either product is right.
 

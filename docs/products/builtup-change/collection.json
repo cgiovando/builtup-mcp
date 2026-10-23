@@ -28,6 +28,11 @@
    "rel": "item",
    "href": "./ssd-malakal-builtup-change-20261023T043456Z/ssd-malakal-builtup-change-20261023T043456Z.json",
    "type": "application/geo+json"
+  },
+  {
+   "rel": "item",
+   "href": "./ssd-renk-builtup-change-20261023T183000Z/ssd-renk-builtup-change-20261023T183000Z.json",
+   "type": "application/geo+json"
   }
  ],
  "title": "Built-up change (on demand)",
@@ -37,8 +42,8 @@
     [
      30.06,
      -1.99,
-     31.7,
-     9.58
+     32.84,
+     11.78
     ]
    ]
   },
@@ -46,7 +51,7 @@
    "interval": [
     [
      "2018-12-01T00:00:00Z",
-     "2026-10-22T00:00:00Z"
+     "2026-10-23T00:00:00Z"
     ]
    ]
   }

@@ -41,10 +41,17 @@ def _round_geojson(src: Path, dst: Path, digits: int = 5) -> None:
 
 
 def newest_items() -> list[Path]:
+    """Newest product per request, skipping AOIs read from a local file.
+
+    A file AOI usually comes from a requester and may not be public, so those
+    products stay local; requests with a bbox or inline geometry are published.
+    """
     newest: dict[str, Path] = {}
     for d in sorted(p for p in SRC.iterdir() if (p / "summary.json").exists()):
-        rid = json.loads((d / "summary.json").read_text())["request"]["request_id"]
-        newest[rid] = d  # names sort by run time
+        req = json.loads((d / "summary.json").read_text())["request"]
+        if "path" in (req.get("raw", {}).get("aoi") or {}):
+            continue
+        newest[req["request_id"]] = d  # names sort by run time
     return list(newest.values())
 
 

@@ -1,0 +1,10 @@
+{
+  "request_id": "ssd-renk-builtup-change",
+  "city": "Renk",
+  "country": "South Sudan",
+  "iso3": "SSD",
+  "aoi": {"bbox": [32.760, 11.700, 32.840, 11.780]},
+  "period": {"start_year": 2019, "end_year": 2026, "season_months": [12, 1, 2, 3]},
+  "latest_window_days": 90,
+  "options": {}
+}

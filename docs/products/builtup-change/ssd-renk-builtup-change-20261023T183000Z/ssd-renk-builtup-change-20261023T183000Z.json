@@ -1,0 +1,174 @@
+{
+ "type": "Feature",
+ "stac_version": "1.1.0",
+ "stac_extensions": [],
+ "id": "ssd-renk-builtup-change-20261023T183000Z",
+ "geometry": {
+  "type": "Polygon",
+  "coordinates": [
+   [
+    [
+     32.84,
+     11.7
+    ],
+    [
+     32.84,
+     11.78
+    ],
+    [
+     32.76,
+     11.78
+    ],
+    [
+     32.76,
+     11.7
+    ],
+    [
+     32.84,
+     11.7
+    ]
+   ]
+  ]
+ },
+ "bbox": [
+  32.76,
+  11.7,
+  32.84,
+  11.78
+ ],
+ "properties": {
+  "title": "Renk built-up change 2018-2026",
+  "city": "Renk",
+  "country": "South Sudan",
+  "proj:code": "EPSG:32636",
+  "gsd": 10.0,
+  "builtup:windows": [
+   {
+    "label": "2019 season",
+    "start": "2018-12-01",
+    "end": "2019-03-31"
+   },
+   {
+    "label": "2020 season",
+    "start": "2019-12-01",
+    "end": "2020-03-31"
+   },
+   {
+    "label": "2021 season",
+    "start": "2020-12-01",
+    "end": "2021-03-31"
+   },
+   {
+    "label": "2022 season",
+    "start": "2021-12-01",
+    "end": "2022-03-31"
+   },
+   {
+    "label": "2023 season",
+    "start": "2022-12-01",
+    "end": "2023-03-31"
+   },
+   {
+    "label": "2024 season",
+    "start": "2023-12-01",
+    "end": "2024-03-31"
+   },
+   {
+    "label": "2025 season",
+    "start": "2024-12-01",
+    "end": "2025-03-31"
+   },
+   {
+    "label": "2026 season",
+    "start": "2025-12-01",
+    "end": "2026-03-31"
+   },
+   {
+    "label": "latest (2026-10-23)",
+    "start": "2026-07-25",
+    "end": "2026-10-23"
+   }
+  ],
+  "builtup:gain_ha_total": 268.2,
+  "builtup:accuracy": {
+   "fused": {
+    "holdout_pixels": 17079,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.016,
+    "precision": 0.961,
+    "recall": 0.958,
+    "f1": 0.959,
+    "roc_auc": 0.995
+   },
+   "optical": {
+    "holdout_pixels": 15845,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.028,
+    "precision": 0.863,
+    "recall": 0.906,
+    "f1": 0.884,
+    "roc_auc": 0.987
+   },
+   "sar": {
+    "holdout_pixels": 15507,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.105,
+    "precision": 0.789,
+    "recall": 0.779,
+    "f1": 0.784,
+    "roc_auc": 0.935
+   }
+  },
+  "builtup:label_source": "Overture 2026-10-21.0 buildings",
+  "processing:software": {
+   "builtup-mcp": "0.2.0"
+  },
+  "start_datetime": "2018-12-01T00:00:00Z",
+  "end_datetime": "2026-10-23T00:00:00Z",
+  "datetime": null
+ },
+ "links": [
+  {
+   "rel": "root",
+   "href": "../../catalog.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "collection",
+   "href": "../collection.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "parent",
+   "href": "../collection.json",
+   "type": "application/json"
+  }
+ ],
+ "assets": {
+  "gain_epoch": {
+   "href": "./gain_epoch.tif",
+   "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+   "title": "Window of first built-up",
+   "roles": [
+    "data"
+   ]
+  },
+  "gain_polygons_geojson": {
+   "href": "./gain_polygons.geojson",
+   "type": "application/geo+json",
+   "title": "New built-up polygons (GeoJSON)",
+   "roles": [
+    "data"
+   ]
+  },
+  "summary": {
+   "href": "./summary.json",
+   "type": "application/json",
+   "title": "Provenance, accuracy and static-layer comparison",
+   "roles": [
+    "metadata"
+   ]
+  }
+ },
+ "collection": "builtup-change"
+}

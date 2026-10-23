@@ -107,7 +107,10 @@ def _load_or_build(req: ChangeRequest, grid, window, orbit, use_sar: bool, log) 
     t0 = time.time()
     c = build_composite(req.bbox, grid, tuple(window), orbit_state=orbit, use_sar=use_sar)
     failed = c.meta.get("s2_failed", 0) + c.meta.get("s1_failed", 0)
-    if failed:
+    tried = c.meta.get("s2_candidates", 0) + c.meta.get("s1_candidates", 0)
+    # A scene or two that never reads (a corrupt asset) should not block caching
+    # forever; a throttled burst (many failures) should.
+    if failed > max(1, 0.1 * tried):
         # Do not freeze a transient outage into the cache; the next run retries.
         log(f"  {window}: {failed} scene reads failed; composite not cached")
     else:

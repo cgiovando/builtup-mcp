@@ -63,7 +63,7 @@
 <body>
 <aside>
   <h1>On-demand built-up change</h1>
-  <div class="tag">Sentinel-1 + Sentinel-2 composites, classified per request with open footprints as labels, delivered as a STAC item with COGs and GeoParquet. <a href="https://github.com/cgiovando/builtup-mcp" target="_blank" rel="noopener">builtup-mcp</a></div>
+  <div class="tag">Sentinel-1 + Sentinel-2 composites, classified per request with open footprints as labels, delivered as a STAC item with COGs and GeoParquet. <a href="https://github.com/cgiovando/builtup-mcp" target="_blank" rel="noopener">builtup-mcp</a> &middot; <a href="v0.1/">v0.1 validation map</a></div>
 
   <h2>Product</h2>
   <select id="product"></select>
@@ -223,9 +223,13 @@ async function selectProduct(i) {
   map.addLayer({ id: 'gain', type: 'fill', source: 'gain', paint: { 'fill-color': epochColorExpr(n),
     'fill-opacity': ['case', ['==', ['get', 'provisional'], true], 0.35, 0.88],
     'fill-outline-color': ['case', ['==', ['get', 'provisional'], true], '#ffffff', 'rgba(0,0,0,0)'] } }, 'anchor-top');
-  map.addSource('hex', { type: 'geojson', data: cur.base + 'h3_stats.geojson' });
+  const hex = await getJSON(cur.base + 'h3_stats.geojson');
+  const g = hex.features.map(f => f.properties.gain_ha_total || 0).sort((a, b) => a - b);
+  const top = Math.max(g[Math.floor(g.length * 0.95)] || 1, 1);  // scale to this city's range
+  map.addSource('hex', { type: 'geojson', data: hex });
   map.addLayer({ id: 'hex', type: 'fill', source: 'hex', layout: { visibility: 'none' },
-    paint: { 'fill-color': ['interpolate', ['linear'], ['get', 'gain_ha_total'], 0, 'rgba(143,92,255,0)', 5, 'rgba(143,92,255,.35)', 20, 'rgba(143,92,255,.75)'], 'fill-outline-color': '#8f5cff' } }, 'anchor-top');
+    paint: { 'fill-color': ['interpolate', ['linear'], ['get', 'gain_ha_total'], 0, 'rgba(143,92,255,0)', top * 0.15, 'rgba(143,92,255,0.08)', top, 'rgba(143,92,255,0.6)'],
+      'fill-outline-color': 'rgba(190,160,255,0.5)' } }, 'anchor-top');
   const c = s.corners_wgs84;
   map.fitBounds([[Math.min(c[0][0], c[3][0]), Math.min(c[2][1], c[3][1])], [Math.max(c[1][0], c[2][0]), Math.max(c[0][1], c[1][1])]], { padding: 30, duration: 600 });
   applyStatic();
@@ -287,7 +291,7 @@ async function main() {
   sel.value = idx;
   await selectProduct(idx);
 }
-main().catch(err => { document.getElementById('kpis').innerHTML = `<div class="note">Could not load products: ${err.message}. Run <code>uv run builtup-demo</code>.</div>`; });
+main().catch(err => { document.getElementById('kpis').innerHTML = `<div class="note">Could not load products: ${err.message}. Locally, run <code>uv run builtup-demo</code>; for GitHub Pages, <code>uv run python scripts/export_pages.py</code>.</div>`; });
 </script>
 </body>
 </html>

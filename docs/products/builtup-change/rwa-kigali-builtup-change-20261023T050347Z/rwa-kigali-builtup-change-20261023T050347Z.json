@@ -1,0 +1,169 @@
+{
+ "type": "Feature",
+ "stac_version": "1.1.0",
+ "stac_extensions": [],
+ "id": "rwa-kigali-builtup-change-20261023T050347Z",
+ "geometry": {
+  "type": "Polygon",
+  "coordinates": [
+   [
+    [
+     30.14,
+     -1.99
+    ],
+    [
+     30.14,
+     -1.92
+    ],
+    [
+     30.06,
+     -1.92
+    ],
+    [
+     30.06,
+     -1.99
+    ],
+    [
+     30.14,
+     -1.99
+    ]
+   ]
+  ]
+ },
+ "bbox": [
+  30.06,
+  -1.99,
+  30.14,
+  -1.92
+ ],
+ "properties": {
+  "title": "Kigali built-up change 2019-2026",
+  "city": "Kigali",
+  "country": "Rwanda",
+  "proj:code": "EPSG:32736",
+  "gsd": 10.0,
+  "builtup:windows": [
+   {
+    "label": "2019 season",
+    "start": "2019-06-01",
+    "end": "2019-08-31"
+   },
+   {
+    "label": "2020 season",
+    "start": "2020-06-01",
+    "end": "2020-08-31"
+   },
+   {
+    "label": "2021 season",
+    "start": "2021-06-01",
+    "end": "2021-08-31"
+   },
+   {
+    "label": "2022 season",
+    "start": "2022-06-01",
+    "end": "2022-08-31"
+   },
+   {
+    "label": "2023 season",
+    "start": "2023-06-01",
+    "end": "2023-08-31"
+   },
+   {
+    "label": "2024 season",
+    "start": "2024-06-01",
+    "end": "2024-08-31"
+   },
+   {
+    "label": "2025 season",
+    "start": "2025-06-01",
+    "end": "2025-08-31"
+   },
+   {
+    "label": "2026 season",
+    "start": "2026-06-01",
+    "end": "2026-08-31"
+   }
+  ],
+  "builtup:gain_ha_total": 260.4,
+  "builtup:accuracy": {
+   "fused": {
+    "holdout_pixels": 22670,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.014,
+    "precision": 0.978,
+    "recall": 0.958,
+    "f1": 0.968,
+    "roc_auc": 0.993
+   },
+   "optical": {
+    "holdout_pixels": 22678,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.028,
+    "precision": 0.95,
+    "recall": 0.939,
+    "f1": 0.944,
+    "roc_auc": 0.986
+   },
+   "sar": {
+    "holdout_pixels": 23512,
+    "threshold": 0.6,
+    "dead_band_fraction": 0.051,
+    "precision": 0.914,
+    "recall": 0.875,
+    "f1": 0.894,
+    "roc_auc": 0.964
+   }
+  },
+  "builtup:label_source": "Overture 2026-10-21.0 buildings",
+  "processing:software": {
+   "builtup-mcp": "0.2.0"
+  },
+  "start_datetime": "2019-06-01T00:00:00Z",
+  "end_datetime": "2026-08-31T00:00:00Z",
+  "datetime": null
+ },
+ "links": [
+  {
+   "rel": "root",
+   "href": "../../catalog.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "collection",
+   "href": "../collection.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "parent",
+   "href": "../collection.json",
+   "type": "application/json"
+  }
+ ],
+ "assets": {
+  "gain_epoch": {
+   "href": "./gain_epoch.tif",
+   "type": "image/tiff; application=geotiff; profile=cloud-optimized",
+   "title": "Window of first built-up",
+   "roles": [
+    "data"
+   ]
+  },
+  "gain_polygons_geojson": {
+   "href": "./gain_polygons.geojson",
+   "type": "application/geo+json",
+   "title": "New built-up polygons (GeoJSON)",
+   "roles": [
+    "data"
+   ]
+  },
+  "summary": {
+   "href": "./summary.json",
+   "type": "application/json",
+   "title": "Provenance, accuracy and static-layer comparison",
+   "roles": [
+    "metadata"
+   ]
+  }
+ },
+ "collection": "builtup-change"
+}

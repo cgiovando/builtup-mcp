@@ -1,6 +1,6 @@
 """Export Sentinel-2 true-color before/after PNGs per AOI for the web map.
 
-For each region's hotspot AOI (read from docs/data/<region>_meta.json), find the
+For each region's hotspot AOI (read from docs/v0.1/data/<region>_meta.json), find the
 least-cloudy Sentinel-2 scene near a "before" and "after" epoch, read true-color
 (B04/B03/B02) onto the AOI grid, stretch to 8-bit, and write a PNG plus the
 lon/lat corner coordinates (for a MapLibre image source). Metadata is merged
@@ -25,7 +25,7 @@ from builtup_mcp.geo import BBox, utm_epsg
 from builtup_mcp.sources import stac
 from builtup_mcp.sources.raster_io import read_on_grid, target_grid
 
-DATA_DIR = Path("docs/data")
+DATA_DIR = Path("docs/v0.1/data")
 IMG_DIR = DATA_DIR / "imagery"
 RGB_ASSETS = ("B04", "B03", "B02")  # red, green, blue (10 m)
 # (epoch label, representative date, look-back window days)

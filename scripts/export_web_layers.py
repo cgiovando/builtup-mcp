@@ -1,4 +1,4 @@
-"""Export per-city GeoJSON layers for the interactive web map (docs/data/).
+"""Export per-city GeoJSON layers for the interactive web map (docs/v0.1/data/).
 
 For each scan region: find the change hotspot, run the detector, compare to Open
 Buildings, and write classified points (agreement / detected-only / reference-only) plus a
@@ -27,7 +27,7 @@ from builtup_mcp.sources.open_buildings import fetch_building_presence
 from builtup_mcp.sources.raster_io import target_grid
 from builtup_mcp.validation import _dilate, compare_gain_to_open_buildings
 
-DATA_DIR = Path("docs/data")
+DATA_DIR = Path("docs/v0.1/data")
 Y1, Y2 = 2018, 2023
 
 PRETTY = {

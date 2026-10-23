@@ -1,0 +1,85 @@
+{
+ "type": "Collection",
+ "id": "builtup-change",
+ "stac_version": "1.1.0",
+ "description": "Built-up change products from Sentinel-2 and Sentinel-1 seasonal composites, classified per request with open building footprints as weak labels. Each item is one city request.",
+ "links": [
+  {
+   "rel": "root",
+   "href": "../catalog.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "parent",
+   "href": "../catalog.json",
+   "type": "application/json"
+  },
+  {
+   "rel": "item",
+   "href": "./rwa-kigali-builtup-change-20261023T050347Z/rwa-kigali-builtup-change-20261023T050347Z.json",
+   "type": "application/geo+json"
+  },
+  {
+   "rel": "item",
+   "href": "./ssd-juba-builtup-change-20261023T043627Z/ssd-juba-builtup-change-20261023T043627Z.json",
+   "type": "application/geo+json"
+  },
+  {
+   "rel": "item",
+   "href": "./ssd-malakal-builtup-change-20261023T043456Z/ssd-malakal-builtup-change-20261023T043456Z.json",
+   "type": "application/geo+json"
+  }
+ ],
+ "title": "Built-up change (on demand)",
+ "extent": {
+  "spatial": {
+   "bbox": [
+    [
+     30.06,
+     -1.99,
+     31.7,
+     9.58
+    ]
+   ]
+  },
+  "temporal": {
+   "interval": [
+    [
+     "2018-12-01T00:00:00Z",
+     "2026-10-22T00:00:00Z"
+    ]
+   ]
+  }
+ },
+ "license": "CC-BY-4.0",
+ "providers": [
+  {
+   "name": "Copernicus / ESA",
+   "roles": [
+    "producer"
+   ],
+   "url": "https://dataspace.copernicus.eu"
+  },
+  {
+   "name": "Microsoft Planetary Computer",
+   "roles": [
+    "host"
+   ],
+   "url": "https://planetarycomputer.microsoft.com"
+  },
+  {
+   "name": "Overture Maps Foundation (labels, ODbL)",
+   "roles": [
+    "licensor"
+   ],
+   "url": "https://overturemaps.org"
+  },
+  {
+   "name": "builtup-mcp",
+   "roles": [
+    "processor"
+   ],
+   "url": "https://github.com/cgiovando/builtup-mcp"
+  }
+ ]
+}

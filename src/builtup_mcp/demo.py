@@ -31,6 +31,8 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             target = (root / clean[len("/products/"):]).resolve()
             # Never serve anything outside the catalog folder.
             return str(target) if target.is_relative_to(root) else str(root / "__forbidden__")
+        if clean.startswith("/v0.1/"):
+            return str(APP_DIR.parent / "docs" / clean.lstrip("/"))
         return super().translate_path(path)
 
     def end_headers(self) -> None:

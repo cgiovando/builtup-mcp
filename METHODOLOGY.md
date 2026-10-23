@@ -41,6 +41,24 @@ All reads are anonymous; no credentials are required.
 
 Both references are model outputs. Agreement is evidence of consistency; disagreement shows where a reference sample (for example very-high-resolution imagery) is needed before figures are used for decisions.
 
+## Results (version 0.2, October 2026)
+
+Dry-season composites, 2019 to 2026. Agreement is pixel F1 with a one-pixel tolerance on the same 10 m grid.
+
+| | Malakal | Juba | Kigali |
+| --- | --- | --- | --- |
+| Area, season | 66 sq km, Dec-Mar | 66 sq km, Dec-Mar | 69 sq km, Jun-Aug |
+| Built-up, first to last season (ha) | 760 to 908 | 4,103 to 4,724 | 4,289 to 4,549 |
+| New built-up, confirmed / provisional (ha) | 148 / 105 | 620 / 105 | 260 / 0 |
+| Held-out F1 vs footprint labels (fused model) | 0.91 | 0.96 | 0.97 |
+| WSF Tracker: extent agreement | 0.76 | 0.97 | 0.96 |
+| WSF Tracker: new built-up, ours / WSF (ha) and agreement | 148 / 96, 0.21 | 620 / 169, 0.42 | 210 / 108, 0.49 |
+| Seasons without usable Sentinel-1 | 2022-2025 | none | none |
+
+Both products find the towns in the same place and show similar growth trends, but they rarely flag the same pixels as new. In Malakal, image checks found errors on both sides: WSF Tracker caught a new shelter block by the river that this product had already scored as built-up in 2019 (bright bare ground), and this product caught dispersed infill that WSF Tracker missed. Settling which is right needs an independent reference sample.
+
+Static layers over the same areas (newest epoch, ha built): Malakal 254 (ESA WorldCover 2021), 45 (Open Buildings 2023), 905 (Esri / Impact Observatory 2023), 712 (WSF Tracker Jan 2026). They answer different questions (roof presence, land-cover class, settlement extent) at different dates.
+
 ## Version 0.1 validation (kept for reference)
 
 The v0.1 heuristic (single scenes, NDBI and VV thresholds, both sensors required) was validated against Google Open Buildings 2.5D Temporal on auto-selected 4 sq km hotspots, 2018 to 2023, with a one-pixel tolerance:

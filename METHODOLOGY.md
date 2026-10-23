@@ -1,135 +1,72 @@
 # Methodology
 
-`builtup-mcp` produces an on-demand **built-up change signal** (where built-up area has increased)
-over small bounding boxes, at higher temporal cadence than published epoch products such as GHSL or
-the World Settlement Footprint. It is designed for new-construction detection and, in future, disaster
-damage assessment. This document describes the data, the processing pipeline, the change-detection
-logic, and how the prototype was validated.
+`builtup-mcp` produces on-demand **built-up change products** for a city or any area of interest: where built-up area appeared (and optionally disappeared), dated to the composite window in which it was first observed, at 10 m, up to the most recent satellite pass. It is designed for requests that annual or static global layers cannot answer: fast-growing towns, displacement settlements, and areas where the newest open layer predates the change of interest.
 
-> Status: research prototype. The current detector is a transparent spectral + radar heuristic that
-> stands in for a future learned model. See [Limitations](#limitations) and [Roadmap](#roadmap).
+> Status: research prototype, version 0.2. Version 0.1 (single scenes, fixed NDBI and backscatter thresholds) is kept as the `detect_builtup_change` tool and as a baseline. See [Limitations](#limitations).
 
 ## Design principles
 
-- **Cloud-native and lean.** Everything is read on demand from public cloud sources with windowed
-  reads (only the pixels overlapping the AOI are fetched). Nothing is bulk-downloaded.
-- **Swappable adapters.** Data sources (vector, optical, SAR, reference) and the change detector sit
-  behind stable interfaces, so individual components can be replaced (e.g. Sentinel-1 -> NISAR, or the
-  heuristic -> a learned model) without changing the pipeline or output schema.
-- **Honest, time-qualified outputs.** A "change" statement is meaningless without a known baseline
-  date, so the baseline age is always reported (see [Baseline modes](#baseline-modes)).
+- **A request is the unit.** A request names an AOI, a period and the calendar months to compare; the product is built for that request and records it verbatim, so any run can be repeated.
+- **Cloud-native, nothing bulk-downloaded.** Imagery is read with windowed COG reads from STAC catalogs; footprints are read from the Overture GeoParquet files that intersect the AOI only.
+- **Accuracy travels with the product.** Every product carries its own held-out accuracy and a comparison against independent published layers over the period each covers.
+- **Standard delivery.** Products are STAC items with COG, GeoParquet and JSON assets in a self-contained catalog, readable by QGIS, Python, R or any STAC client.
 
 ## Data sources
 
 | Role | Source | Access | Resolution | License |
 | --- | --- | --- | --- | --- |
 | Optical | Sentinel-2 L2A (`sentinel-2-l2a`) | Microsoft Planetary Computer STAC | 10-20 m | open (Copernicus) |
-| SAR | Sentinel-1 RTC (`sentinel-1-rtc`) | Microsoft Planetary Computer STAC | ~10 m | open (Copernicus) |
-| Vector baseline | Overture Maps buildings | Public S3 GeoParquet (DuckDB) | n/a | ODbL |
-| Validation reference | Google Open Buildings 2.5D Temporal | Public GCS COGs | ~4 m | CC-BY-4.0 / ODbL |
+| SAR | Sentinel-1 RTC (`sentinel-1-rtc`) | Microsoft Planetary Computer STAC | 10 m | open (Copernicus) |
+| Labels and footprint baseline | Overture Maps buildings (latest release, resolved via the Overture STAC catalog) | Public GeoParquet (DuckDB) | vector | ODbL |
+| Comparison | WSF Tracker (DLR / MindEarth), six-monthly to Jan 2026 | Public GeoZarr, Source Cooperative | 10 m | see dataset DOI 10.5281/zenodo.20424537 |
+| Comparison | Google Open Buildings 2.5D Temporal, annual to 2023 | Public GCS | ~4 m effective | CC-BY-4.0 / ODbL |
+| Comparison | Esri / Impact Observatory land cover (to 2023), ESA WorldCover (2020-2021) | Planetary Computer STAC | 10 m | CC-BY-4.0 |
 
 All reads are anonymous; no credentials are required.
 
 ## Pipeline
 
-1. **Input validation.** A WGS84 bbox (`min_lon, min_lat, max_lon, max_lat`) and date(s). The bbox is
-   capped (default 5 sq km) to keep iteration fast; coordinates and ordering are validated, and the
-   area is estimated with an equirectangular approximation.
-2. **Vector baseline (optional).** Overture building footprints intersecting the bbox are fetched with
-   DuckDB, filtering on Overture's `bbox` struct for predicate pushdown. Per-feature
-   `sources[].update_time` is read to characterise the baseline's data freshness.
-3. **Cloud-native EO reads.** For each date, the least-cloudy Sentinel-2 scene over the AOI is selected
-   (by reading the SCL scene-classification band, not just scene metadata), with a temporal fallback
-   that widens the search window. Sentinel-1 is selected by closest acquisition that fully covers the
-   AOI. NIR (B08), SWIR (B11), SCL, and SAR VV/VH are read in a single windowed call onto a common 10 m
-   grid in the scene's native UTM zone.
-4. **Alignment.** All rasters are aligned to the Sentinel-2 grid (Sentinel-1 is reprojected onto it).
-   Overture footprints are reprojected into the same grid and rasterised when used as a baseline.
-5. **Change detection.** See below.
-6. **Output.** Changed pixels are vectorised to point centroids and written as GeoJSON (WGS84) with
-   attributes (`change_type`, `confidence`, contributing signal values, cluster id/size), plus a concise
-   text summary.
+1. **Request and windows.** A request gives a bbox or polygon, a year range and `season_months`. One composite window is built per year over the same calendar months (for example December-March, the dry season in South Sudan), so seasonal vegetation and soil moisture are not mistaken for change. An optional rolling window covers the last N days to give the latest picture.
+2. **Composites.** For each window the clearest Sentinel-2 scenes (up to 16 per MGRS tile, so AOIs across tile edges are covered on both sides) are warped onto one 10 m UTM grid; cloud, shadow, cirrus and snow pixels are masked with the scene classification band, and the per-band median is taken. Scenes from processing baseline 04.00 onward (from 25 Jan 2022) have the +1000 reflectance offset removed, otherwise indices drift across 2022. Sentinel-1 acquisitions from one orbit direction are reduced to the median and standard deviation of VV and VH backscatter in dB. Built structures are bright and temporally stable in C-band, which separates them from bare soil, the main confusion of optical built-up indices.
+3. **Features.** NDBI, NDVI, MNDWI, a bare-soil index, brightness, the SWIR2/SWIR1 ratio and local texture (5x5 standard deviation of NIR and NDVI) from Sentinel-2; VV and VH medians, their difference, their temporal standard deviation and VV texture from Sentinel-1.
+4. **Per-request classifier.** The AOI's own Overture footprints are rasterised to building-cover fraction per 10 m pixel. Pixels with at least 25% cover are positive labels; pixels more than 40 m from any footprint are negative; everything in between is ignored. Samples are pooled across windows so the model learns built-up across years, sensors (Sentinel-1A vs 1C, Sentinel-2A/B/C) and wet or dry years: positives come only from windows ending no more than three years before the footprints' median update date, and negatives only from windows starting no more than one year after it, because after mapping "far from any footprint" no longer means "not built". A gradient-boosted classifier is fitted three ways where the data allow: fused (optical and SAR), optical-only and SAR-only. Every pixel of every window is scored by the richest model its data support, so cloud gaps and Sentinel-1 gaps degrade the product instead of stopping it. Windows with fewer than four Sentinel-1 acquisitions are treated as SAR gaps.
+5. **Held-out accuracy.** Before the final fit, 20% of 500 m spatial blocks are withheld and the model is scored on them at the product's own built-up threshold (p >= 0.6), with the share of pixels falling in the dead band reported alongside. Because the labels come from incomplete footprint maps, this measures agreement with mapped buildings, not ground truth.
+6. **Epoch of change.** Each window's probability becomes a state with a dead band: built (p >= 0.6), not built (p <= 0.35) or unknown. A pixel's gain is dated to the first built window after its last not-built window. This rule is persistent by construction (after the gain the pixel is never again observed as not built) and needs no tuning. Isolated pixels, clusters under 10 pixels (0.1 ha) and linear features under 30 m wide (mostly graded roads) are removed. The rolling latest window (and a current season clipped to today) is kept out of change dating, so it cannot erase gains confirmed in earlier seasons; it only adds provisional detections, because it is usually off-season or thinly observed. Loss (the mirror rule) is available on request and is experimental.
+7. **Products.** Built-up probability per window (multi-band COG), gain epoch (COG), new built-up polygons with first-seen window, area and confidence (GeoParquet and GeoJSON), H3 resolution-8 neighbourhood statistics, the footprints with the window in which each first read as built-up, the static-layer comparison, the benchmark, and a `summary.json` holding provenance (scene ids per window, Overture release, model and thresholds). A STAC item ties them together.
 
-## Change detection
+## Benchmarks run with every product
 
-The current detector is a deliberately simple, transparent placeholder for a future learned model.
+- **WSF Tracker.** Built-up extent at the last composite window ending by March 2026, against WSF epochs up to that window's end date, and new built-up between the first window and the same matched date, pixel by pixel with a one-pixel tolerance.
+- **Google Open Buildings 2.5D Temporal.** New built-up between the first window's year and 2023 (presence rising from below 0.3 to at least 0.5).
 
-- **Built-up score.** Per date, a 0-1 score is computed as the **minimum** of a normalised NDBI signal
-  (optical: `(SWIR - NIR) / (SWIR + NIR)`) and a normalised Sentinel-1 VV backscatter (dB) signal.
-  Using the minimum means a pixel only scores high where optical **and** radar agree, which is the main
-  lever against single-sensor noise.
-- **State transition.** A pixel is "built-up" on a date when its score crosses a threshold. **Gain** is
-  a transition from not-built-up to built-up between the two reference points; this is far less noisy
-  than thresholding a raw index difference.
-- **Spatial cleanup.** Isolated pixels are removed (minimum-neighbour filter), and only connected
-  **gain clusters** above a minimum size are reported (8-connectivity). This focuses on coherent new
-  developments and suppresses speckle.
-- **Loss** (built-up disappearing) is implemented but **disabled by default**, because at 10 m against
-  sparse/old vector baselines it is not yet reliable.
+Both references are model outputs. Agreement is evidence of consistency; disagreement shows where a reference sample (for example very-high-resolution imagery) is needed before figures are used for decisions.
 
-These thresholds live in `config.py` and are intended to be tuned or replaced.
+## Version 0.1 validation (kept for reference)
 
-## Baseline modes
+The v0.1 heuristic (single scenes, NDBI and VV thresholds, both sensors required) was validated against Google Open Buildings 2.5D Temporal on auto-selected 4 sq km hotspots, 2018 to 2023, with a one-pixel tolerance:
 
-The "before" reference is configurable (option C):
+| City | Gain px | Precision (OB-new) | Recall |
+| --- | --- | --- | --- |
+| Lagos (Lekki) | 4,364 | 81.5% | ~44% |
+| Greater Dhaka | 880 | 73.1% | ~18% |
+| Bengaluru (east) | 1,092 | 38.8% | ~13% |
+| Nairobi (NE) | 558 | 28.7% | ~15% |
 
-- **Pre/post pair** (`baseline_date` supplied): two Sentinel acquisitions. The baseline age is *exactly
-  known* (the chosen dates), e.g. "change over 2018-2023". This is the recommended, unambiguous mode.
-- **Single date vs reference** (`baseline_date` omitted): the target-date built-up signal is compared
-  against the rasterised Overture baseline. Because Overture footprints come from mixed sources (OSM,
-  ML) with varying age, the pipeline reports the **data-freshness distribution** from
-  `sources[].update_time` (median, oldest, newest), so the change can be time-qualified rather than
-  presented as if the baseline were current.
-
-## Validation
-
-Detected gains are validated against **Google Open Buildings 2.5D Temporal**, which provides annual
-`building_presence` layers (2016-2023). This is an independent, model-derived reference; the detector
-uses only Sentinel data, so the comparison is genuinely out-of-sample.
-
-- **Evidence-driven AOI selection.** Rather than guessing locations, a scanner reads Open Buildings
-  over a city region and selects the ~4 sq km window with the most newly-built pixels (presence rising
-  from below 0.3 to at/above 0.5 between two years). The detector is then run on that confirmed-change
-  AOI.
-- **Metrics.** With a 1-pixel tolerance (to absorb the 10 m vs ~4 m georeferencing offset):
-  - *Precision* = fraction of detected gain pixels that coincide with Open Buildings "new" pixels.
-  - *Recall* = fraction of Open Buildings "new" pixels that are detected.
-  - *Enrichment* = precision divided by the AOI base rate (how much better than chance).
-- **Figures** overlay three classes on a faint ESRI World Imagery basemap: agreement (yellow),
-  detected-only (red), and reference-only / undetected (cyan).
-
-### Results (auto-selected hotspots, 2018 -> 2023)
-
-| City | Gain px | Precision (OB-new) | Recall | Context |
-| --- | --- | --- | --- | --- |
-| Lagos (Lekki) | 4,364 | 81.5% | ~44% | large contiguous development |
-| Greater Dhaka | 880 | 73.1% | ~18% | dense active expansion |
-| Bengaluru (east) | 1,092 | 38.8% | ~13% | already-dense infill |
-| Nairobi (NE) | 558 | 28.7% | ~15% | sparse expanding edge |
-
-**Reading the results.** Precision is strong where genuine, substantial change occurs (73-82%), and
-recall scales with how large and contiguous the change is (high in Lagos, low for dispersed growth).
-Recall is structurally limited (~13-44%) by the conservative "both sensors must agree" design - which
-is exactly what buys the high precision. Closing that gap without losing precision is the motivation
-for a learned model.
+Recall was structurally limited by the fixed both-sensors rule, which motivated the v0.2 classifier. Those runs also predate the processing-baseline offset fix, which biased post-2022 NDBI downward.
 
 ## Limitations
 
-- **Heuristic, not learned.** NDBI + backscatter thresholds are a stand-in; they conflate built-up with
-  bare soil and active construction, and they cannot achieve both high precision and high recall.
-- **Resolution.** Output is a 10 m pixel-level signal, not building footprints. Genuine information
-  content from Sentinel-2 saturates around 3-4 m even with super-resolution, so finer grids would be
-  interpolation, not measurement.
-- **SAR is backscatter, not coherence.** The RTC product has no interferometric phase, so the SAR
-  signal is a backscatter change, not coherence loss (the gold standard for damage mapping).
-- **Loss detection** is not yet trustworthy and is disabled by default.
-- **Coverage.** Google Open Buildings (validation) covers the Global South only; Overture height and
-  freshness vary by region.
+- **Labels are footprints, not ground truth.** Where footprint maps are sparse or old, the classifier learns from what is mapped. Held-out scores measure consistency with those maps.
+- **10 m, not buildings.** The signal is built-up surface at 10 m, suited to neighbourhood and block scale. Individual small structures (for example tukuls or shelters) are detected as clusters, not counted.
+- **Season.** Comparisons are only as clean as the season choice. Off-season windows (wet season, flooding) change surface reflectance and backscatter; gains first seen there are provisional.
+- **Sentinel-1 gaps.** After Sentinel-1B failed in December 2021, parts of Africa had few or no acquisitions until Sentinel-1C (2025). Those windows are scored optical-only and flagged.
+- **Backscatter, not coherence.** RTC has no phase. Coherence-based damage mapping needs SLC data.
+- **References end early.** Open Buildings Temporal ends in 2023 and WSF Tracker in January 2026, so 2026 change has no independent reference yet.
+- **Infrastructure dependency.** Planetary Computer is a free service without an SLA. The STAC reader is generic, so another catalog with the same collections can be substituted.
 
 ## Roadmap
 
-- Replace the heuristic with a learned built-up/change model (e.g. an Earth-observation foundation
-  backbone) behind the same detector interface, to lift recall while preserving precision.
-- Add an SLC SAR source for true coherence-based change/damage detection.
-- Add a NISAR `SARSource` adapter once calibrated, cloud-native data is available.
-- Optional richer attributes (height, footprint geometry) as reliable sources emerge.
+- Reference samples from very-high-resolution imagery for per-request validation.
+- NISAR L-band as a third sensor once validated products are released.
+- Coherence from Sentinel-1 SLC for damage mapping.
+- A fallback STAC catalog (Copernicus Data Space or Earth Search) behind the same reader.

@@ -19,3 +19,6 @@ outputs/
 
 # macOS
 .DS_Store
+
+# Timesheet (local only)
+.timesheet-log.md

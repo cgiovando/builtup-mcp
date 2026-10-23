@@ -1,0 +1,10 @@
+{
+  "request_id": "rwa-kigali-builtup-change",
+  "city": "Kigali",
+  "country": "Rwanda",
+  "iso3": "RWA",
+  "aoi": {"bbox": [30.060, -1.990, 30.140, -1.920]},
+  "period": {"start_year": 2019, "end_year": 2026, "season_months": [6, 7, 8]},
+  "latest_window_days": 60,
+  "options": {}
+}

@@ -1,0 +1,10 @@
+{
+  "request_id": "ssd-malakal-builtup-change",
+  "city": "Malakal",
+  "country": "South Sudan",
+  "iso3": "SSD",
+  "aoi": {"bbox": [31.640, 9.490, 31.700, 9.580]},
+  "period": {"start_year": 2019, "end_year": 2026, "season_months": [12, 1, 2, 3]},
+  "latest_window_days": 90,
+  "options": {"detect_loss": true}
+}

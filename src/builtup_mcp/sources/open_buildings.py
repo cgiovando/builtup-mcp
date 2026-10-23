@@ -15,7 +15,7 @@ import urllib.request
 
 import numpy as np
 
-from .raster_io import Grid, read_on_grid
+from .raster_io import Grid, read_warped
 
 _BUCKET = "open-buildings-temporal-data"
 _MANIFEST = (
@@ -90,25 +90,35 @@ def _best_tile(manifest: dict, grid: Grid):
 
 
 def _overlapping_tiles(grid: Grid, year: int) -> list[tuple[str, dict, float]]:
-    """All (uriPrefix, source, overlap_area) tiles intersecting the grid."""
-    tokens = _candidate_tokens(grid.epsg, year)
-    if not tokens:
+    """All (uriPrefix, source, overlap_area) tiles intersecting the grid.
+
+    Open Buildings tiles are stored in the UTM zone of their S2 cell, which near
+    a zone boundary is often the neighbouring zone of the analysis grid (Kigali,
+    at 30.1 E, is mostly in EPSG:32735 tiles). The grid's zone and both
+    neighbours are searched, and overlap is computed in each tile's own CRS.
+    """
+    from rasterio.warp import transform_bounds
+
+    zone = grid.epsg % 100
+    base = grid.epsg - zone
+    epsgs = [base + z for z in (zone - 1, zone, zone + 1) if 1 <= z <= 60]
+    out: list[tuple[str, dict, float]] = []
+    for epsg in epsgs:
+        bounds = transform_bounds(f"EPSG:{grid.epsg}", f"EPSG:{epsg}", *grid.bounds)
+        for token in _candidate_tokens(epsg, year):
+            url = _MANIFEST.format(token=token, epsg=epsg, year=year)
+            with urllib.request.urlopen(url, timeout=120) as fh:
+                manifest = json.load(fh)
+            prefix = manifest["uriPrefix"]
+            for src in manifest["tilesets"][0]["sources"]:
+                area = _overlap_area(bounds, _tile_bounds(src["affineTransform"], src["dimensions"]))
+                if area > 0:
+                    out.append((prefix, src, area))
+    if not out and not any(_candidate_tokens(e, year) for e in epsgs):
         raise ValueError(
-            f"No Open Buildings manifest for EPSG:{grid.epsg} {year} "
+            f"No Open Buildings manifest near EPSG:{grid.epsg} for {year} "
             "(AOI likely outside Open Buildings coverage)."
         )
-    out: list[tuple[str, dict, float]] = []
-    for token in tokens:
-        url = _MANIFEST.format(token=token, epsg=grid.epsg, year=year)
-        with urllib.request.urlopen(url, timeout=120) as fh:
-            manifest = json.load(fh)
-        prefix = manifest["uriPrefix"]
-        for src in manifest["tilesets"][0]["sources"]:
-            area = _overlap_area(
-                grid.bounds, _tile_bounds(src["affineTransform"], src["dimensions"])
-            )
-            if area > 0:
-                out.append((prefix, src, area))
     return out
 
 
@@ -119,7 +129,7 @@ def _read_presence_tile(prefix: str, src: dict, grid: Grid) -> np.ndarray:
     defined on [0, 1], so anything outside that range is set to NaN.
     """
     href = _https(prefix + src["uris"][0])
-    arr = read_on_grid(href, grid, "bilinear", band=_PRESENCE_BAND).astype("float32")
+    arr = read_warped(href, grid, "bilinear", band=_PRESENCE_BAND).astype("float32")
     arr[(arr < 0.0) | (arr > 1.0)] = np.nan
     return arr
 

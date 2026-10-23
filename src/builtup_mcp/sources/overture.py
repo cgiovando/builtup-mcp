@@ -5,6 +5,10 @@ only the building polygons intersecting a small BBox. Used as the "known
 built-up" baseline prior for change detection.
 
 Design notes:
+- The release is resolved through Overture's STAC catalog, and the catalog's
+  per-file bboxes are used to read only the GeoParquet files that intersect the
+  AOI (usually one or two of ~500). This replaces a glob over the whole release
+  and cuts a typical query from ~100 s to a few seconds.
 - Filtering uses Overture's top-level ``bbox`` STRUCT (xmin/xmax/ymin/ymax) so
   DuckDB can use Parquet row-group statistics for predicate pushdown and skip
   files/row-groups without reading them. This is the fast path; filtering on the
@@ -16,6 +20,10 @@ Design notes:
 """
 
 from __future__ import annotations
+
+import json
+import urllib.request
+from functools import lru_cache
 
 import duckdb
 import geopandas as gpd
@@ -37,10 +45,73 @@ _ATTR_COLUMNS = (
 )
 
 
+def _get_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=60) as fh:
+        return json.load(fh)
+
+
+_latest_cache: dict[str, tuple[float, str]] = {}
+
+
+def resolve_release(release: str = config.OVERTURE_RELEASE) -> str:
+    """Return a concrete Overture release id ("latest" -> newest in the catalog).
+
+    The lookup is cached for an hour so a long-running MCP server picks up new
+    monthly releases.
+    """
+    import time
+
+    if release != "latest":
+        return release
+    hit = _latest_cache.get("latest")
+    if hit and time.time() - hit[0] < 3600:
+        return hit[1]
+    rel = _get_json(f"{config.OVERTURE_STAC_URL}/catalog.json")["latest"]
+    _latest_cache["latest"] = (time.time(), rel)
+    return rel
+
+
+def _intersects(a, b) -> bool:
+    return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
+
+
+@lru_cache(maxsize=32)
+def release_files(bbox_tuple: tuple, release: str) -> tuple[str, ...]:
+    """S3 paths of the building files whose extent intersects the bbox.
+
+    The collection's ``extent.spatial.bbox`` lists the union first and then one
+    bbox per item, in the same order as its ``item`` links.
+    """
+    base = f"{config.OVERTURE_STAC_URL}/{release}/buildings/building"
+    coll = _get_json(f"{base}/collection.json")
+    file_bboxes = coll["extent"]["spatial"]["bbox"][1:]
+    items = [lk["href"] for lk in coll["links"] if lk["rel"] == "item"]
+    paths = []
+    for fb, href in zip(file_bboxes, items):
+        if _intersects(fb, bbox_tuple):
+            item = _get_json(href)
+            paths.append(item["assets"]["aws"]["alternate"]["s3"]["href"])
+    return tuple(paths)
+
+
+def release_path_for(bbox: BBox, release: str = config.OVERTURE_RELEASE) -> list[str]:
+    """Concrete file list for ``bbox`` (falls back to the release-wide glob)."""
+    rel = resolve_release(release)
+    try:
+        files = list(release_files(bbox.as_tuple(), rel))
+    except Exception:  # catalog unreachable: glob the release
+        files = []
+    return files or [
+        f"s3://overturemaps-{config.OVERTURE_S3_REGION}/release/{rel}"
+        "/theme=buildings/type=building/*"
+    ]
+
+
 def _connect() -> duckdb.DuckDBPyConnection:
     """Open a DuckDB connection configured for anonymous Overture S3 reads."""
     con = duckdb.connect()
     con.execute("INSTALL httpfs; LOAD httpfs;")
+    con.execute("SET enable_progress_bar = false;")  # stdout belongs to MCP stdio
     con.execute(f"SET s3_region = '{config.OVERTURE_S3_REGION}';")
     # Force unsigned/anonymous access so ambient AWS credentials in the
     # environment don't cause signed requests against this public bucket.
@@ -55,7 +126,7 @@ def _connect() -> duckdb.DuckDBPyConnection:
     return con
 
 
-def build_bbox_query(bbox: BBox, release_path: str = config.OVERTURE_BUILDINGS_PATH) -> str:
+def build_bbox_query(bbox: BBox, release_path: str | list[str]) -> str:
     """Build the DuckDB SQL that fetches buildings overlapping ``bbox``.
 
     Filters on Overture's ``bbox`` struct (xmin/xmax/ymin/ymax) so DuckDB can use
@@ -64,11 +135,13 @@ def build_bbox_query(bbox: BBox, release_path: str = config.OVERTURE_BUILDINGS_P
     """
     min_lon, min_lat, max_lon, max_lat = bbox.as_tuple()
     cols = ", ".join(_ATTR_COLUMNS)
+    paths = [release_path] if isinstance(release_path, str) else list(release_path)
+    source = "[" + ", ".join(f"'{p}'" for p in paths) + "]"
     # Most-recent source update_time per building = data freshness of the baseline.
     update_expr = "list_max(list_transform(sources, s -> s.update_time)) AS source_update_time"
     return f"""
         SELECT {cols}, {update_expr}, geometry
-        FROM read_parquet('{release_path}', hive_partitioning => true)
+        FROM read_parquet({source}, hive_partitioning => true)
         WHERE bbox.xmin <= {max_lon}
           AND bbox.xmax >= {min_lon}
           AND bbox.ymin <= {max_lat}
@@ -79,15 +152,15 @@ def build_bbox_query(bbox: BBox, release_path: str = config.OVERTURE_BUILDINGS_P
 def fetch_buildings(
     bbox: BBox,
     *,
-    release_path: str = config.OVERTURE_BUILDINGS_PATH,
+    release_path: str | list[str] | None = None,
     clip: bool = True,
 ) -> gpd.GeoDataFrame:
     """Fetch Overture building footprints intersecting ``bbox``.
 
     Args:
         bbox: The WGS84 query box.
-        release_path: Overture buildings GeoParquet glob (S3). Defaults to the
-            pinned release in :mod:`builtup_mcp.config`.
+        release_path: Overture buildings GeoParquet path(s). Defaults to the
+            files of the configured release that intersect ``bbox``.
         clip: If True, clip results to the exact BBox; otherwise return any
             building whose own bbox overlaps (cheaper, includes edge spillover).
 
@@ -97,7 +170,7 @@ def fetch_buildings(
         present, else ``num_floors * FLOOR_HEIGHT_M``, else NaN).
     """
     min_lon, min_lat, max_lon, max_lat = bbox.as_tuple()
-    query = build_bbox_query(bbox, release_path)
+    query = build_bbox_query(bbox, release_path or release_path_for(bbox))
 
     con = _connect()
     try:

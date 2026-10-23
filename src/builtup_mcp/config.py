@@ -26,16 +26,13 @@ WGS84_EPSG: int = 4326
 
 # --- Overture Maps (Phase 2) ------------------------------------------------
 
-# Pinned release for reproducibility. 2026-04-15.0 is a stable, well-aged
-# monthly release (the very latest is 2026-05-20.0). Override via env var.
-OVERTURE_RELEASE: str = os.environ.get("BUILTUP_MCP_OVERTURE_RELEASE", "2026-04-15.0")
+# Overture release. "latest" is resolved at run time from Overture's STAC catalog
+# (https://stac.overturemaps.org), and the resolved id is written into every
+# product's provenance. Overture keeps only the last few releases online, so a
+# hard-coded id goes stale within months; pin one via env var for reproducibility.
+OVERTURE_RELEASE: str = os.environ.get("BUILTUP_MCP_OVERTURE_RELEASE", "latest")
 OVERTURE_S3_REGION: str = "us-west-2"
-
-# Anonymous, public, hive-partitioned GeoParquet on AWS Open Data.
-OVERTURE_BUILDINGS_PATH: str = (
-    f"s3://overturemaps-{OVERTURE_S3_REGION}/release/{OVERTURE_RELEASE}"
-    "/theme=buildings/type=building/*"
-)
+OVERTURE_STAC_URL: str = "https://stac.overturemaps.org"
 
 # Fallback floor-to-meters factor when a building has num_floors but no height.
 FLOOR_HEIGHT_M: float = 3.0
@@ -65,6 +62,42 @@ MAX_AOI_CLOUD_FRACTION: float = 0.35
 # Sentinel-2 SCL classes treated as cloud / shadow / invalid for masking.
 # 0 no-data, 1 saturated, 3 cloud shadow, 8 cloud med, 9 cloud high, 10 thin cirrus.
 SCL_CLOUD_CLASSES: tuple[int, ...] = (0, 1, 3, 8, 9, 10)
+
+# --- Composites + city requests (v0.2) --------------------------------------
+
+# City requests cover whole urban extents, so they get their own, larger cap.
+CITY_MAX_AREA_KM2: float = float(os.environ.get("BUILTUP_MCP_CITY_MAX_KM2", "150.0"))
+
+# Scenes per window. More S2 scenes = fewer cloud gaps; more S1 = less speckle.
+COMPOSITE_MAX_S2_SCENES: int = 16
+COMPOSITE_MAX_S1_SCENES: int = 12
+COMPOSITE_MIN_S1_SCENES: int = 2
+COMPOSITE_MIN_S1_FOR_MODEL: int = 4  # fewer acquisitions -> window scored optical-only
+
+# A Sentinel-2 scene joins a composite only if this fraction of the AOI is clear.
+MIN_SCENE_CLEAR_FRACTION: float = 0.15
+
+# Parallel windowed COG reads.
+READ_WORKERS: int = int(os.environ.get("BUILTUP_MCP_READ_WORKERS", "12"))
+
+# Default composite window length when only dates are given (days before the date).
+DEFAULT_WINDOW_DAYS: int = 120
+
+# Per-request classifier (weak supervision from open building footprints).
+LABEL_POS_FRACTION: float = 0.25  # >= this building cover in a 10 m pixel = built-up
+LABEL_NEG_BUFFER_M: float = 40.0  # negatives must be this far from any footprint
+LABEL_MAX_PER_CLASS: int = 60000  # per class, split across pooled windows
+POSITIVE_LOOKBACK_YEARS: float = 3.0
+NEGATIVE_LOOKAHEAD_YEARS: float = 1.0
+MIN_LABELS_PER_CLASS: int = 300
+# Time-series state thresholds on built-up probability (hysteresis).
+PROB_BUILT: float = 0.6
+PROB_NOT_BUILT: float = 0.35
+# Spatial blocks (m) for the held-out accuracy estimate.
+HOLDOUT_BLOCK_M: float = 500.0
+
+# H3 resolution for neighbourhood statistics (res 8 ~ 0.74 sq km cells).
+H3_RESOLUTION: int = 8
 
 # --- Change detection (Phase 4, placeholder spectral/backscatter heuristics) -
 # These thresholds stand in for a future learned model. NDBI = (SWIR-NIR)/(SWIR+NIR);
@@ -122,3 +155,18 @@ SCAN_REGIONS: dict[str, tuple[float, float, float, float]] = {
     "bengaluru_east": (77.6800, 12.9300, 77.7800, 13.0100),
     "kampala_ug": (32.5800, 0.2800, 32.6800, 0.3800),
 }
+
+# --- Products + catalog (v0.2) ----------------------------------------------
+
+# Latest annual layer published in Google Open Buildings 2.5D Temporal.
+OPEN_BUILDINGS_LATEST_YEAR: int = 2023
+
+# Root of the local STAC catalog that city-request products are written into.
+PRODUCTS_DIR: Path = Path(
+    os.environ.get("BUILTUP_MCP_PRODUCTS_DIR", str(Path.home() / ".cache" / "builtup-mcp" / "products"))
+)
+# Composite cache (re-runs and demos skip the network).
+CACHE_DIR: Path = Path(
+    os.environ.get("BUILTUP_MCP_CACHE_DIR", str(Path.home() / ".cache" / "builtup-mcp" / "composites"))
+)
+PRODUCT_VERSION: str = "0.2.0"

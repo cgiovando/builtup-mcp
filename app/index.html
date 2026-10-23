@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>builtup-mcp - on-demand built-up change</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  :root {
+    --bg: #0f1520; --panel: #161e2b; --panel2: #1f2a3b; --line: #2c3a50;
+    --text: #e9eef5; --muted: #9aabbf; --accent: #3d8bfd;
+    --built: #ff8c00; --gain: #ff3d3d; --static: #00bfff; --ok: #3ccf8e; --warn: #f5b942;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 380px; right: 0; }
+  aside { position: absolute; top: 0; bottom: 0; left: 0; width: 380px; overflow-y: auto;
+    background: var(--panel); border-right: 1px solid var(--line); padding: 18px 18px 30px; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .2px; }
+  .tag { color: var(--muted); font-size: 12px; margin: 4px 0 14px; line-height: 1.45; }
+  h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted);
+    margin: 18px 0 8px; font-weight: 600; }
+  select { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px; font-size: 13px; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { background: var(--panel2); border-radius: 9px; padding: 10px 11px; }
+  .kpi .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 11px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+  .kpi.hl .v { color: var(--gain); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  td, th { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 11px; }
+  td.r, th.r { text-align: right; }
+  .stale { color: var(--warn); font-weight: 600; }
+  .fresh { color: var(--ok); font-weight: 600; }
+  .bar { height: 6px; border-radius: 3px; background: var(--accent); display: inline-block; vertical-align: middle; }
+  .bar.s1 { background: #b28dff; }
+  .slider { background: var(--panel2); border-radius: 10px; padding: 12px; }
+  .slider .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  .slider .cur { font-size: 15px; font-weight: 650; color: var(--text); margin: 2px 0 8px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; cursor: pointer; }
+  .sw { width: 13px; height: 13px; border-radius: 3px; display: inline-block; flex: none; }
+  .note { color: var(--muted); font-size: 11.5px; line-height: 1.5; margin-top: 8px; }
+  .acc { font-size: 12.5px; line-height: 1.6; }
+  .acc b { font-variant-numeric: tabular-nums; }
+  .btns { display: flex; gap: 6px; margin-top: 8px; }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 7px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer; flex: 1; }
+  button.on { background: var(--accent); border-color: var(--accent); }
+  .legend { position: absolute; right: 14px; bottom: 30px; background: rgba(22,30,43,.92); border: 1px solid var(--line);
+    border-radius: 9px; padding: 10px 12px; font-size: 12px; min-width: 210px; }
+  .ramp { height: 10px; border-radius: 3px; margin: 6px 0 3px; }
+  .ramp-l { display: flex; justify-content: space-between; color: var(--muted); font-size: 10.5px; }
+  .maplibregl-popup-content { background: var(--panel); color: var(--text); border-radius: 8px; font-size: 12px; }
+  .maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+  a { color: #7fb4ff; }
+  code { font-size: 11px; color: #c8d4e3; }
+</style>
+</head>
+<body>
+<aside>
+  <h1>On-demand built-up change</h1>
+  <div class="tag">Sentinel-1 + Sentinel-2 composites, classified per request with open footprints as labels, delivered as a STAC item with COGs and GeoParquet. <a href="https://github.com/cgiovando/builtup-mcp" target="_blank" rel="noopener">builtup-mcp</a></div>
+
+  <h2>Product</h2>
+  <select id="product"></select>
+  <div class="note" id="stac"></div>
+
+  <h2>Window</h2>
+  <div class="slider">
+    <div class="cur" id="wlabel">-</div>
+    <input type="range" id="w" min="0" max="0" value="0" step="1" />
+    <div class="lbl"><span id="wfirst"></span><span id="wlast"></span></div>
+    <div class="btns"><button id="play">Play</button><button id="latest">Latest</button></div>
+  </div>
+
+  <h2>Layers</h2>
+  <label class="row"><input type="checkbox" id="t-ql" checked /> Sentinel-2 composite of the window</label>
+  <label class="row"><input type="checkbox" id="t-built" /> <span class="sw" style="background:var(--built)"></span> Built-up in the window</label>
+  <label class="row"><input type="checkbox" id="t-gain" checked /> <span class="sw" style="background:var(--gain)"></span> New built-up up to the window</label>
+  <label class="row"><input type="checkbox" id="t-hex" /> <span class="sw" style="background:#8f5cff"></span> New built-up per H3 cell</label>
+  <label class="row"><input type="checkbox" id="t-static" /> <span class="sw" style="background:var(--static)"></span> Static layer: <select id="static" style="width:auto;padding:3px;margin-left:4px"></select></label>
+
+  <h2>Headline</h2>
+  <div class="kpis" id="kpis"></div>
+
+  <h2>Static layers vs this product</h2>
+  <table id="statics"></table>
+
+  <h2>Accuracy (held-out)</h2>
+  <div class="acc" id="acc"></div>
+
+  <h2>Data per window</h2>
+  <table id="windows"></table>
+</aside>
+<div id="map"></div>
+<div class="legend" id="legend"></div>
+
+<script>
+const PRODUCTS = 'products/';
+const RAMP = ['#fff5a5', '#ffd24d', '#ff9d2e', '#ff5a2a', '#e0192f', '#a50f3b', '#6b0a4b', '#3d0a52', '#24073a'];
+let map, items = [], cur = null, timer = null;
+
+const fmt = (x, d = 0) => (x === null || x === undefined || Number.isNaN(x)) ? '-' :
+  Number(x).toLocaleString('en-US', { maximumFractionDigits: d, minimumFractionDigits: d });
+
+async function getJSON(u) { const r = await fetch(u); if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }
+
+async function loadCatalog() {
+  const coll = await getJSON(PRODUCTS + 'builtup-change/collection.json');
+  const links = coll.links.filter(l => l.rel === 'item');
+  const out = [];
+  for (const l of links) {
+    const href = PRODUCTS + 'builtup-change/' + l.href.replace(/^\.\//, '');
+    const item = await getJSON(href);
+    const base = href.substring(0, href.lastIndexOf('/') + 1);
+    const summary = await getJSON(base + 'summary.json');
+    out.push({ item, base, summary, href });
+  }
+  // Newest product per request id only.
+  const byReq = {};
+  for (const p of out) {
+    const rid = p.summary.request.request_id;
+    if (!byReq[rid] || byReq[rid].summary.generated_utc < p.summary.generated_utc) byReq[rid] = p;
+  }
+  return Object.values(byReq).sort((a, b) => a.summary.city.localeCompare(b.summary.city));
+}
+
+function epochColorExpr(n) {
+  const e = ['match', ['get', 'gain_epoch']];
+  for (let k = 1; k < n; k++) e.push(k, RAMP[Math.min(RAMP.length - 1, Math.round((k - 1) * (RAMP.length - 1) / Math.max(1, n - 2)))]);
+  e.push('#ff3d3d');
+  return e;
+}
+
+function setImage(id, url, coords, opacity, before) {
+  if (map.getLayer(id)) map.removeLayer(id);
+  if (map.getSource(id)) map.removeSource(id);
+  if (!url) return;
+  map.addSource(id, { type: 'image', url, coordinates: coords });
+  map.addLayer({ id, type: 'raster', source: id, paint: { 'raster-opacity': opacity, 'raster-fade-duration': 0, 'raster-resampling': 'nearest' } }, before);
+}
+
+function showWindow(k) {
+  const s = cur.summary, n = s.window_labels.length;
+  document.getElementById('wlabel').innerHTML = `${s.window_labels[k]}<div style="font-size:11.5px;font-weight:400;color:var(--muted)">${s.windows[k].start} .. ${s.windows[k].end}${k > s.window_labels.indexOf(s.latest_confirmed_window) ? ' &middot; off-season, detections provisional' : ''}</div>`;
+  const ql = s.quicklooks[k];
+  setImage('ql', document.getElementById('t-ql').checked && ql ? cur.base + ql : null, s.corners_wgs84, 1.0, 'anchor-mid');
+  setImage('built', document.getElementById('t-built').checked ? cur.base + s.built_masks[k] : null, s.corners_wgs84, 0.75, 'anchor-top');
+  if (map.getLayer('gain')) {
+    map.setFilter('gain', ['all', ['>=', ['get', 'gain_epoch'], 1], ['<=', ['get', 'gain_epoch'], k]]);
+    map.setLayoutProperty('gain', 'visibility', document.getElementById('t-gain').checked ? 'visible' : 'none');
+  }
+  const gained = Object.values(s.gain_ha_by_window).slice(0, k).reduce((a, b) => a + b, 0);
+  document.getElementById('legend').innerHTML = `
+    <b>New built-up, first seen in</b>
+    <div class="ramp" style="background:linear-gradient(90deg,${RAMP.slice(0, Math.max(2, n - 1)).join(',')})"></div>
+    <div class="ramp-l"><span>${s.window_labels[1] || ''}</span><span>${s.window_labels[n - 1]}</span></div>
+    <div style="margin-top:8px">Up to this window: <b>${fmt(gained, 0)} ha</b> new</div>
+    <div style="color:var(--muted);font-size:11px">Built-up this window: ${fmt(s.windows[k].built_ha, 0)} ha</div>`;
+}
+
+function renderPanel() {
+  const s = cur.summary, n = s.window_labels.length, year = new Date().getFullYear();
+  document.getElementById('stac').innerHTML = `STAC item <code>${cur.item.id}</code> &middot; <a href="${cur.href}" target="_blank">item.json</a> &middot; <a href="${cur.base}summary.json" target="_blank">summary.json</a>`;
+  const w = document.getElementById('w');
+  w.max = n - 1; w.value = Math.max(0, s.window_labels.indexOf(s.latest_confirmed_window));
+  document.getElementById('wfirst').textContent = s.window_labels[0];
+  document.getElementById('wlast').textContent = s.window_labels[n - 1];
+  const growth = s.built_first_ha ? 100 * (s.built_latest_ha - s.built_first_ha) / s.built_first_ha : NaN;
+  const sinceStatic = (() => {
+    const ob = (s.static_layers || []).find(l => (l.layer || '').startsWith('Google Open Buildings'));  // newest annual open layer
+    if (!ob) return null;
+    let ha = 0;
+    const lastK = s.window_labels.indexOf(s.latest_confirmed_window);
+    s.window_labels.forEach((lab, k) => { if (k > 0 && k <= lastK && parseInt(s.windows[k].end.slice(0, 4)) > ob.latest_year) ha += s.gain_ha_by_window[lab] || 0; });
+    return { ha, year: ob.latest_year };
+  })();
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="v">${fmt(s.built_first_ha)} ha</div><div class="l">built-up, ${s.window_labels[0]}</div></div>
+    <div class="kpi"><div class="v">${fmt(s.built_latest_ha)} ha</div><div class="l">built-up, ${s.latest_confirmed_window}</div></div>
+    <div class="kpi hl"><div class="v">${fmt(s.gain_ha_total)} ha</div><div class="l">new built-up, confirmed (${fmt(growth, 0)}% growth)</div></div>
+    <div class="kpi"><div class="v">${fmt(s.provisional_gain_ha)} ha</div><div class="l">provisional, seen only in ${s.window_labels[n - 1]}</div></div>
+    <div class="kpi hl"><div class="v">${sinceStatic ? fmt(sinceStatic.ha) + ' ha' : '-'}</div><div class="l">new since ${sinceStatic ? sinceStatic.year : '-'}, the last year of the annual open layers</div></div>
+    <div class="kpi"><div class="v">${fmt(s.footprint_baseline.n_footprints)}</div><div class="l">open footprints, median dated ${s.footprint_baseline.median_update || '-'}</div></div>
+    <div class="kpi"><div class="v">${fmt(s.footprint_baseline.n_unmapped_gain_ha)} ha</div><div class="l">new built-up with no footprint yet</div></div>`;
+
+  const rows = (s.static_layers || []).filter(l => l.latest_year).map(l => {
+    const lag = year - l.latest_year;
+    return `<tr><td>${l.layer}</td><td class="r">${l.latest_year}</td><td class="r stale">${lag} yr</td><td class="r">${fmt(l.built_ha)}</td></tr>`;
+  }).join('');
+  const lastEnd = s.windows[n - 1].end;
+  document.getElementById('statics').innerHTML = `<tr><th>Layer</th><th class="r">Latest</th><th class="r">Age</th><th class="r">Built ha</th></tr>${rows}
+    <tr><td><b>This product</b></td><td class="r">${lastEnd}</td><td class="r fresh">${Math.max(0, Math.round((Date.now() - Date.parse(lastEnd)) / 864e5))} d</td><td class="r"><b>${fmt(s.built_latest_ha)}</b></td></tr>`;
+  const sel = document.getElementById('static');
+  sel.innerHTML = '';
+  [['static_wsf-tracker.png', 'WSF Tracker to Jan 2026'], ['static_open-buildings.png', 'Open Buildings 2023'], ['static_io-lulc-annual-v02.png', 'Esri/IO land cover 2023'], ['static_esa-worldcover.png', 'ESA WorldCover 2021']]
+    .forEach(([f, l]) => { const o = document.createElement('option'); o.value = f; o.textContent = l; sel.appendChild(o); });
+
+  const acc = s.accuracy || {};
+  document.getElementById('acc').innerHTML = Object.entries(acc).filter(([, m]) => m && m.f1 !== undefined).map(([k, m]) =>
+    `<div>${k}: F1 <b>${m.f1}</b> &middot; precision <b>${m.precision}</b> &middot; recall <b>${m.recall}</b> &middot; AUC <b>${m.roc_auc}</b></div>`).join('') +
+    `<div class="note">${s.accuracy_note}</div>`;
+
+  const maxS2 = Math.max(...s.windows.map(w => w['sentinel-2']), 1), maxS1 = Math.max(...s.windows.map(w => w['sentinel-1']), 1);
+  document.getElementById('windows').innerHTML = `<tr><th>Window</th><th>S2 scenes</th><th>S1 scenes</th><th class="r">New ha</th></tr>` +
+    s.windows.map((w, k) => `<tr><td>${w.label}</td>
+      <td><span class="bar" style="width:${50 * w['sentinel-2'] / maxS2}px"></span> ${w['sentinel-2']}</td>
+      <td>${w['sentinel-1'] ? `<span class="bar s1" style="width:${50 * w['sentinel-1'] / maxS1}px"></span> ${w['sentinel-1']}` : '<span class="stale">none</span>'}</td>
+      <td class="r">${k ? fmt(s.gain_ha_by_window[w.label], 0) : '-'}</td></tr>`).join('');
+}
+
+async function selectProduct(i) {
+  cur = items[i];
+  const s = cur.summary, n = s.window_labels.length;
+  renderPanel();
+  for (const id of ['gain', 'hex', 'hex-line']) if (map.getLayer(id)) map.removeLayer(id);
+  for (const id of ['gain', 'hex']) if (map.getSource(id)) map.removeSource(id);
+  map.addSource('gain', { type: 'geojson', data: cur.base + 'gain_polygons.geojson' });
+  map.addLayer({ id: 'gain', type: 'fill', source: 'gain', paint: { 'fill-color': epochColorExpr(n),
+    'fill-opacity': ['case', ['==', ['get', 'provisional'], true], 0.35, 0.88],
+    'fill-outline-color': ['case', ['==', ['get', 'provisional'], true], '#ffffff', 'rgba(0,0,0,0)'] } }, 'anchor-top');
+  map.addSource('hex', { type: 'geojson', data: cur.base + 'h3_stats.geojson' });
+  map.addLayer({ id: 'hex', type: 'fill', source: 'hex', layout: { visibility: 'none' },
+    paint: { 'fill-color': ['interpolate', ['linear'], ['get', 'gain_ha_total'], 0, 'rgba(143,92,255,0)', 5, 'rgba(143,92,255,.35)', 20, 'rgba(143,92,255,.75)'], 'fill-outline-color': '#8f5cff' } }, 'anchor-top');
+  const c = s.corners_wgs84;
+  map.fitBounds([[Math.min(c[0][0], c[3][0]), Math.min(c[2][1], c[3][1])], [Math.max(c[1][0], c[2][0]), Math.max(c[0][1], c[1][1])]], { padding: 30, duration: 600 });
+  applyStatic();
+  document.getElementById('t-hex').dispatchEvent(new Event('change'));
+  showWindow(+document.getElementById('w').value);
+}
+
+function applyStatic() {
+  const on = document.getElementById('t-static').checked;
+  setImage('static', on ? cur.base + document.getElementById('static').value : null, cur.summary.corners_wgs84, 0.75, map.getLayer('gain') ? 'gain' : 'anchor-top');
+}
+
+function initMap() {
+  map = new maplibregl.Map({
+    container: 'map',
+    style: { version: 8, sources: {
+      esri: { type: 'raster', tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'], tileSize: 256, maxzoom: 19,
+        attribution: 'Imagery: Esri, Maxar, Earthstar Geographics | Composites: Copernicus Sentinel-2 | Footprints: Overture Maps (ODbL)' } },
+      layers: [{ id: 'esri', type: 'raster', source: 'esri' },
+        { id: 'anchor-mid', type: 'background', paint: { 'background-opacity': 0 } },
+        { id: 'anchor-top', type: 'background', paint: { 'background-opacity': 0 } }] },
+    center: [31.67, 9.53], zoom: 12, hash: true,
+  });
+  map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+  map.on('click', 'gain', e => {
+    const p = e.features[0].properties;
+    new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>New built-up</b><br>first seen: ${p.gain_window}<br>area: ${fmt(p.area_ha, 2)} ha<br>confidence: ${fmt(p.confidence, 2)}${p.provisional === true || p.provisional === 'true' ? '<br><span class="stale">provisional (latest window only)</span>' : ''}`).addTo(map);
+  });
+  map.on('click', 'hex', e => {
+    if (map.queryRenderedFeatures(e.point, { layers: ['gain'] }).length) return;
+    const p = e.features[0].properties;
+    new maplibregl.Popup().setLngLat(e.lngLat).setHTML(`<b>H3 ${p.h3}</b><br>new built-up: ${fmt(p.gain_ha_total, 1)} ha<br>built: ${fmt(p.built_first_ha, 1)} &rarr; ${fmt(p.built_latest_ha, 1)} ha`).addTo(map);
+  });
+}
+
+async function main() {
+  initMap();
+  await new Promise(r => map.on('load', r));
+  items = await loadCatalog();
+  const sel = document.getElementById('product');
+  items.forEach((p, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `${p.summary.city} (${p.summary.windows[0].start.slice(0, 4)}-${p.summary.windows.at(-1).end.slice(0, 4)})`; sel.appendChild(o); });
+  sel.onchange = () => selectProduct(+sel.value);
+  const w = document.getElementById('w');
+  w.oninput = () => showWindow(+w.value);
+  ['t-ql', 't-built', 't-gain'].forEach(id => document.getElementById(id).onchange = () => showWindow(+w.value));
+  document.getElementById('t-hex').onchange = e => map.getLayer('hex') && map.setLayoutProperty('hex', 'visibility', e.target.checked ? 'visible' : 'none');
+  document.getElementById('t-static').onchange = applyStatic;
+  document.getElementById('static').onchange = applyStatic;
+  document.getElementById('latest').onclick = () => { w.value = w.max; showWindow(+w.max); };  // includes the provisional window
+  document.getElementById('play').onclick = e => {
+    if (timer) { clearInterval(timer); timer = null; e.target.textContent = 'Play'; e.target.classList.remove('on'); return; }
+    e.target.textContent = 'Pause'; e.target.classList.add('on');
+    w.value = 0; showWindow(0);
+    timer = setInterval(() => { const k = (+w.value + 1) % (+w.max + 1); w.value = k; showWindow(k); }, 1400);
+  };
+  const q = new URLSearchParams(location.search).get('city');
+  const idx = Math.max(0, items.findIndex(p => p.summary.city.toLowerCase() === (q || '').toLowerCase()));
+  sel.value = idx;
+  await selectProduct(idx);
+}
+main().catch(err => { document.getElementById('kpis').innerHTML = `<div class="note">Could not load products: ${err.message}. Run <code>uv run builtup-demo</code>.</div>`; });
+</script>
+</body>
+</html>

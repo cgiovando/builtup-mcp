@@ -22,7 +22,7 @@ from .processing.indices import ndbi
 from .processing.rasterize import rasterize_buildings
 from .processing.vectorize import change_to_points
 from .sources import sentinel1, sentinel2
-from .sources.overture import baseline_age, fetch_buildings
+from .sources.overture import baseline_age, fetch_buildings, resolve_release
 
 
 @dataclass
@@ -123,7 +123,7 @@ def run_change_detection(
         )
         if overture_age.get("n_dated"):
             baseline_desc = (
-                f"Overture {config.OVERTURE_RELEASE} ({n_overture} buildings; "
+                f"Overture {resolve_release()} ({n_overture} buildings; "
                 f"{overture_age['n_dated']} dated). Median source update "
                 f"{overture_age['median_update']} (~{overture_age['median_age_years']} yr "
                 f"before target; range {overture_age['oldest_update']}.."
@@ -132,7 +132,7 @@ def run_change_detection(
             )
         else:
             baseline_desc = (
-                f"Overture {config.OVERTURE_RELEASE} ({n_overture} buildings; no "
+                f"Overture {resolve_release()} ({n_overture} buildings; no "
                 "source timestamps). Baseline age unknown - interpret gain with caution."
             )
         notes.append(

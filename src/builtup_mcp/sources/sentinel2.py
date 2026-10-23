@@ -21,6 +21,14 @@ class NoUsableSceneError(RuntimeError):
     """Raised when no Sentinel-2 scene meets the AOI cloud threshold in window."""
 
 
+def harmonize(arr: np.ndarray, item) -> np.ndarray:
+    """Remove the processing-baseline 04.00 reflectance offset (DN - 1000)."""
+    arr = arr.astype("float32")
+    if str(item.properties.get("s2:processing_baseline", "00.00")) >= "04.00":
+        arr = np.clip(arr - 1000.0, 0.0, None)
+    return arr
+
+
 def _aoi_cloud_fraction(scl: np.ndarray) -> float:
     """Fraction of AOI pixels flagged as cloud/shadow/invalid by SCL."""
     cloudy = np.isin(scl, config.SCL_CLOUD_CLASSES)
@@ -72,6 +80,9 @@ def fetch_optical(
     frac, item, grid, scl = best
     nir = read_on_grid(item.assets[config.S2_ASSETS["nir"]].href, grid, "bilinear")
     swir = read_on_grid(item.assets[config.S2_ASSETS["swir"]].href, grid, "bilinear")
+    # Processing baseline 04.00+ (from 25 Jan 2022) adds +1000 DN to reflectance.
+    # Without removing it, NDBI shrinks after 2022 and pre/post pairs are biased.
+    nir, swir = harmonize(nir, item), harmonize(swir, item)
     valid = ~np.isin(scl, config.SCL_CLOUD_CLASSES)
 
     return RasterStack(

@@ -26,7 +26,7 @@ def test_build_query_has_bbox_pushdown_predicates():
     assert "bbox.xmax >=" in sql
     assert "bbox.ymin <=" in sql
     assert "bbox.ymax >=" in sql
-    assert "read_parquet('s3://example/*'" in sql
+    assert "read_parquet(['s3://example/*']" in sql
     # The numeric bounds appear in the SQL.
     assert str(AOI.max_lon) in sql
     assert str(AOI.min_lat) in sql

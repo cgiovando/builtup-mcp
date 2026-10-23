@@ -1,0 +1,10 @@
+{
+  "request_id": "ssd-juba-builtup-change",
+  "city": "Juba",
+  "country": "South Sudan",
+  "iso3": "SSD",
+  "aoi": {"bbox": [31.530, 4.830, 31.620, 4.890]},
+  "period": {"start_year": 2019, "end_year": 2026, "season_months": [12, 1, 2, 3]},
+  "latest_window_days": 90,
+  "options": {}
+}

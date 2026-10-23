@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "builtup-mcp": {
+      "command": "uv",
+      "args": ["run", "--extra", "vector", "--extra", "raster", "builtup-mcp"]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 [project]
 name = "builtup-mcp"
-version = "0.1.0"
-description = "On-demand MCP server that detects built-up change over small BBoxes by fusing Sentinel-1 SAR and Sentinel-2 optical, validated against Google Open Buildings 2.5D."
+version = "0.2.0"
+description = "On-demand built-up change products (Sentinel-1/-2 composites, per-request classifier, STAC/COG delivery) behind an MCP server."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,6 +13,7 @@ dependencies = [
 vector = [
     "duckdb>=1.1.0",
     "geopandas>=1.0.0",
+    "pyarrow>=17",
     "shapely>=2.0.0",
 ]
 # Phase 3/4: cloud-native Sentinel-2 raster + processing
@@ -24,6 +25,10 @@ raster = [
     "planetary-computer>=1.0.0",
     "scipy>=1.11.0",
     "contextily>=1.6.0",
+    "scikit-learn>=1.5",
+    "h3>=4.1",
+    "zarr>=3.0",
+    "obstore>=0.6",
 ]
 
 [dependency-groups]
@@ -34,6 +39,8 @@ dev = [
 
 [project.scripts]
 builtup-mcp = "builtup_mcp:main"
+builtup-demo = "builtup_mcp.demo:main"
+builtup-request = "builtup_mcp.cli:main"
 
 [tool.pytest.ini_options]
 markers = [

@@ -47,6 +47,42 @@ def search_items(
     return list(search.items())
 
 
+def _with_retries(fn, attempts: int = 5):
+    """Run a catalog call, retrying transient API errors with backoff."""
+    import time
+
+    for i in range(attempts):
+        try:
+            return fn()
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(2 * (i + 1))
+
+
+def search_range(
+    collection: str,
+    bbox: BBox,
+    start: str,
+    end: str,
+    *,
+    query: dict | None = None,
+) -> list[pystac.Item]:
+    """Search a collection for items intersecting ``bbox`` within [start, end]."""
+    return _with_retries(
+        lambda: list(
+            open_catalog()
+            .search(
+                collections=[collection],
+                bbox=bbox.as_tuple(),
+                datetime=f"{start}/{end}",
+                query=query or {},
+            )
+            .items()
+        )
+    )
+
+
 def _epsg_from_props(props: dict) -> int | None:
     """Extract an EPSG code from a STAC proj-extension property mapping.
 

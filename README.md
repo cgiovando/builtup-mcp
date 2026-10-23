@@ -4,46 +4,36 @@
 
 *Detected built-up gain (yellow = confirmed by Google Open Buildings, red = detected only, cyan = reference only) over an evidence-selected hotspot in Lagos, 2018-2023. [Explore all four cities interactively.](https://cgiovando.github.io/builtup-mcp/)*
 
-An on-demand [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that
-detects **built-up change** (where built-up area has increased or decreased) over small,
-user-defined bounding boxes, at higher temporal cadence than published epoch products
-(GHSL, WSF). It targets new-construction detection and disaster-driven destruction mapping,
-fusing SAR (Sentinel-1, all-weather) with optical (Sentinel-2) and using Overture buildings
-as a baseline prior. Cloud-native data (STAC, COGs, GeoParquet) keeps local processing lean.
+An on-demand [Model Context Protocol](https://modelcontextprotocol.io) (MCP) server that produces **built-up change products** for a city or any area of interest: where built-up area appeared, dated to the season it was first observed, at 10 m, up to the most recent satellite pass. It is built for questions that annual or static global layers cannot answer, such as fast-growing towns and displacement settlements.
 
-A single tool, `detect_builtup_change`, takes a `bbox`, a `target_date`, and an optional
-`baseline_date`, and returns a local GeoJSON file plus a concise text summary. Height is not a
-required output; the schema is extensible so future sources (e.g. NISAR) can add attributes.
+A request names an AOI, a year range and the calendar months to compare. The server builds Sentinel-2 and Sentinel-1 seasonal composites, trains a classifier on the AOI's own Overture building footprints, dates each new built-up pixel, benchmarks the result against WSF Tracker and Google Open Buildings 2.5D Temporal, and writes a STAC item with COG, GeoParquet and JSON assets. All inputs are open and read anonymously from cloud-native endpoints.
 
 ## Status
 
-Prototype, built in phases:
+Research prototype, version 0.2. See **[METHODOLOGY.md](METHODOLOGY.md)** for the method, benchmarks and limitations.
 
-1. **Phase 1 - MCP server skeleton + input validation.** Done.
-2. **Phase 2 - Overture vector baseline (DuckDB on S3 GeoParquet).** Done.
-3. **Phase 3 - Cloud-native EO fetching: Sentinel-1 + Sentinel-2 (STAC, windowed reads).** Done.
-4. **Phase 4 - Change detection (fused optical + SAR) and GeoJSON output.** Done.
-5. **Phase 5 (roadmap) - real models / sources (EO foundation model, SLC coherence, NISAR adapter).** Planned.
+## MCP tools
 
-The Phase 4 detector uses an NDBI + SAR-backscatter heuristic as a placeholder for a future learned
-model; thresholds in `config.py` are tunable. Output is a GeoJSON of 10m pixel centroids tagged
-`change_type` (gain/loss), `confidence`, and the contributing signal values.
+| Tool | What it does |
+| --- | --- |
+| `plan_city_request` | Expand a request into composite windows and count Sentinel-1/-2 scenes per window (seconds) |
+| `run_city_request` | Produce the change product and add it to the local STAC catalog |
+| `list_products`, `get_product_summary` | Browse products: areas, accuracy, data gaps, static-layer comparison |
+| `rank_neighbourhoods` | Rank H3 cells of a product by new built-up or growth |
+| `compare_products` | Rank city products by growth per year |
+| `static_layers_report` | Newest epoch and built-up area of open static layers over a bbox |
+| `detect_builtup_change` | The v0.1 two-date heuristic over a small bbox |
 
-See **[METHODOLOGY.md](METHODOLOGY.md)** for the full approach, change-detection logic, and validation
-(including a four-city comparison against Google Open Buildings 2.5D).
+A product contains `builtup_probability.tif` (COG, one band per window), `gain_epoch.tif` (COG), `gain_polygons` and `h3_stats` (GeoParquet and GeoJSON), `footprints_age.parquet`, quicklooks, and `summary.json` with provenance (scene ids per window, Overture release, model, held-out accuracy, benchmarks).
 
 ## Interactive map
 
-An interactive MapLibre explorer of the four validation AOIs (Lagos, Dhaka, Bengaluru, Nairobi) lives in
-[`docs/`](docs/) and is published via GitHub Pages:
+The original four-city explorer of the v0.1 validation lives in [`docs/`](docs/) and on GitHub Pages: **https://cgiovando.github.io/builtup-mcp/**
 
-**https://cgiovando.github.io/builtup-mcp/**
-
-Toggle layers (agreement / detected-only / reference-only), switch basemaps (ESRI imagery, ESRI
-imagery with labels, OpenStreetMap), and jump between cities. Regenerate the data layers with:
+The v0.2 product explorer in [`app/`](app/) reads the local STAC catalog:
 
 ```bash
-uv run python scripts/export_web_layers.py        # writes docs/data/*.geojson
+uv run builtup-demo            # http://localhost:8765
 ```
 
 ## Requirements
@@ -54,32 +44,25 @@ uv run python scripts/export_web_layers.py        # writes docs/data/*.geojson
 ## Setup
 
 ```bash
-uv sync                                  # Phase 1 (just the MCP SDK)
-uv sync --extra vector --extra raster    # later phases (geospatial stack)
+uv sync --extra vector --extra raster
 ```
 
 ## Usage
 
-Run the server over stdio:
+Run a request from the command line:
+
+```bash
+uv run builtup-request requests/malakal.json --plan   # windows and scene counts
+uv run builtup-request requests/malakal.json          # build the product
+```
+
+Run the server over stdio and register it with any MCP client (`.mcp.json` in this repository does that for Claude Code):
 
 ```bash
 uv run builtup-mcp
 ```
 
-Register it with an MCP client (e.g. Claude Desktop) by pointing the client at the
-`builtup-mcp` command. The exposed tool:
-
-| Tool | Inputs | Output |
-| --- | --- | --- |
-| `detect_builtup_change` | `bbox` = `[min_lon, min_lat, max_lon, max_lat]` (WGS84, < 5 sq km), `target_date` = `YYYY-MM-DD`, optional `baseline_date` = `YYYY-MM-DD` | Text summary + (Phase 4) a GeoJSON file of the built-up change signal |
-
-If `baseline_date` is given, the tool compares that "before" date against `target_date`
-(pre/post pair). If omitted, it compares the target date against a static reference baseline.
-
-### Constraints
-
-- Inputs must be WGS84 (EPSG:4326).
-- BBox area is capped at **5 sq km** (`BUILTUP_MCP_MAX_BBOX_KM2`) to keep local iteration fast.
+Products go to `~/.cache/builtup-mcp/products` (`BUILTUP_MCP_PRODUCTS_DIR`) and composites are cached in `~/.cache/builtup-mcp/composites` (`BUILTUP_MCP_CACHE_DIR`), so re-runs take about a minute. City requests are capped at 150 sq km (`BUILTUP_MCP_CITY_MAX_KM2`).
 
 ## Development
 
@@ -101,5 +84,4 @@ This disclosure follows emerging best practices for transparency in AI-assisted 
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
-Data and references retain their own licenses: Overture Maps (ODbL), Copernicus Sentinel-1/2 (open),
-and Google Open Buildings 2.5D Temporal (CC-BY-4.0 / ODbL).
+Data and references retain their own licenses: Overture Maps (ODbL), Copernicus Sentinel-1/2 (open), Google Open Buildings 2.5D Temporal (CC-BY-4.0 / ODbL), WSF Tracker (DLR / MindEarth, see DOI 10.5281/zenodo.20424537), ESA WorldCover and Esri / Impact Observatory land cover (CC-BY-4.0).

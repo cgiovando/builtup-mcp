@@ -53,7 +53,14 @@ class ChangeRequest:
 
     @property
     def area_km2(self) -> float:
-        return bbox_area_km2(self.bbox)
+        """Geodesic area of the AOI itself (a polygon is not charged for its bbox)."""
+        try:
+            from pyproj import Geod
+
+            area, _ = Geod(ellps="WGS84").geometry_area_perimeter(shape(self.aoi_geometry))
+            return abs(area) / 1e6
+        except ImportError:  # minimal install: fall back to the bbox estimate
+            return bbox_area_km2(self.bbox)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -136,7 +143,7 @@ def build_request(spec: dict, today: date | None = None) -> ChangeRequest:
     )
     if req.area_km2 > config.CITY_MAX_AREA_KM2:
         raise BBoxValidationError(
-            f"AOI bbox is {req.area_km2:.1f} sq km; the city-request cap is "
+            f"AOI is {req.area_km2:.1f} sq km; the city-request cap is "
             f"{config.CITY_MAX_AREA_KM2} sq km (BUILTUP_MCP_CITY_MAX_KM2)."
         )
 

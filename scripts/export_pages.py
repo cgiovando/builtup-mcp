@@ -41,18 +41,28 @@ def _round_geojson(src: Path, dst: Path, digits: int = 5) -> None:
 
 
 def newest_items() -> list[Path]:
-    """Newest product per request, skipping AOIs read from a local file.
-
-    A file AOI usually comes from a requester and may not be public, so those
-    products stay local; requests with a bbox or inline geometry are published.
-    """
+    """Newest product per request (run ids sort by time)."""
     newest: dict[str, Path] = {}
     for d in sorted(p for p in SRC.iterdir() if (p / "summary.json").exists()):
         req = json.loads((d / "summary.json").read_text())["request"]
-        if "path" in (req.get("raw", {}).get("aoi") or {}):
-            continue
-        newest[req["request_id"]] = d  # names sort by run time
+        newest[req["request_id"]] = d
     return list(newest.values())
+
+
+def public_request(s: dict) -> dict:
+    """Drop local file paths from the echoed request; the AOI polygon itself is
+    already in ``aoi_geometry`` and the STAC item geometry."""
+    raw = s.get("request", {}).get("raw", {})
+    aoi = raw.get("aoi") or {}
+    if "path" in aoi:
+        raw["aoi"] = {"geometry": "see request.aoi_geometry"}
+    opts = raw.get("options") or {}
+    if isinstance(opts.get("footprints"), str) and opts["footprints"] != "overture":
+        opts["footprints"] = "requester file"
+    if "footprint_baseline" in s and "requester footprints" in str(s["footprint_baseline"].get("source", "")):
+        s["footprint_baseline"]["source"] = "requester footprints"
+        s.get("model", {})["label_source"] = "requester footprints"
+    return s
 
 
 def main() -> None:
@@ -64,7 +74,7 @@ def main() -> None:
     for d in newest_items():
         out = DST / "builtup-change" / d.name
         out.mkdir()
-        s = json.loads((d / "summary.json").read_text())
+        s = public_request(json.loads((d / "summary.json").read_text()))
         webp = []
         for name in s.get("quicklooks", []):
             if not name:
@@ -82,6 +92,7 @@ def main() -> None:
         (out / "summary.json").write_text(json.dumps(s, indent=1))
 
         item = json.loads((d / f"{d.name}.json").read_text())
+        item["properties"].pop("builtup:label_source", None) if "requester" in str(item["properties"].get("builtup:label_source", "")) else None
         item["assets"] = {k: v for k, v in item["assets"].items() if k in KEEP_ASSETS}
         item["links"] = [
             {"rel": "root", "href": "../../catalog.json", "type": "application/json"},

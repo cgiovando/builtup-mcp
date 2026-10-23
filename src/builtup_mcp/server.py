@@ -106,7 +106,7 @@ def plan_city_request(
         req = build_request(
             _spec(city, bbox, start_year, end_year, season_months, latest_window_days, country, False, request_path)
         )
-        lines = [f"{req.city}: {req.area_km2:.1f} sq km bbox, {len(req.windows)} windows."]
+        lines = [f"{req.city}: {req.area_km2:.1f} sq km AOI, {len(req.windows)} windows."]
         for label, (a, b) in zip(req.window_labels, req.windows):
             s2 = stac.search_range(config.S2_COLLECTION, req.bbox, a, b, query={"eo:cloud_cover": {"lt": config.MAX_SCENE_CLOUD_PCT}})
             s1 = stac.search_range(config.S1_COLLECTION, req.bbox, a, b)

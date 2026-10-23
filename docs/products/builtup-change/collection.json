@@ -26,6 +26,11 @@
   },
   {
    "rel": "item",
+   "href": "./ssd-malakal-aoi2-builtup-change-20261023T183951Z/ssd-malakal-aoi2-builtup-change-20261023T183951Z.json",
+   "type": "application/geo+json"
+  },
+  {
+   "rel": "item",
    "href": "./ssd-malakal-builtup-change-20261023T043456Z/ssd-malakal-builtup-change-20261023T043456Z.json",
    "type": "application/geo+json"
   },

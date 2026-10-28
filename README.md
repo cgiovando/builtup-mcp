@@ -19,6 +19,7 @@ Annual and static global layers describe cities as they were one to eight years 
 ## Try it
 
 - **Explorer:** [cgiovando.github.io/builtup-mcp](https://cgiovando.github.io/builtup-mcp/) shows Malakal (a 66 sq km box and the 106 sq km area of the city request), Renk, Juba and Kigali with a season slider, static-layer overlays and neighbourhood statistics.
+- **Slides:** [Built-up change, on demand](docs/slides/builtup-mcp-proof-of-concept-2026-10.pdf) (PDF, 15 slides, October 2026) walks through the idea, the Malakal and Renk results and the limits.
 - **v0.1 validation map:** [cgiovando.github.io/builtup-mcp/v0.1](https://cgiovando.github.io/builtup-mcp/v0.1/) has the original four-city comparison with Google Open Buildings.
 
 [![The explorer](docs/assets/explorer.jpg)](https://cgiovando.github.io/builtup-mcp/)

@@ -2,7 +2,9 @@
 
 `builtup-mcp` produces on-demand **built-up change products** for a city or any area of interest: where built-up area appeared (and optionally disappeared), dated to the composite window in which it was first observed, at 10 m, up to the most recent satellite pass. It is designed for requests that annual or static global layers cannot answer: fast-growing towns, displacement settlements, and areas where the newest open layer predates the change of interest.
 
-> Status: research prototype, version 0.2. Version 0.1 (single scenes, fixed NDBI and backscatter thresholds) is kept as the `detect_builtup_change` tool and as a baseline. See [Limitations](#limitations).
+> **Status: proof of concept, version 0.2.** This project was built to show that a built-up change product can be produced on request and served to AI agents through the Model Context Protocol. It is not a production method, it has not been validated against an independent reference, and its figures should not be compared with, or used in place of, validated products. The benchmarks below measure agreement with other models, not accuracy. See [Limitations](#limitations).
+>
+> Version 0.1 (single scenes, fixed NDBI and backscatter thresholds) is kept as the `detect_builtup_change` tool and as a baseline.
 
 ## Design principles
 
@@ -26,11 +28,17 @@ All reads are anonymous; no credentials are required.
 
 ## Reference footprints: one source, no conflation step
 
-The project does not combine footprint datasets itself. The only footprints it reads are the Overture Maps buildings theme, latest release, for the AOI. Overture already conflates OpenStreetMap with machine-learned footprints (Microsoft, Google Open Buildings and others) and publishes the result with a per-feature source and update date, so the merge, de-duplication and source priority are Overture's, not this project's.
+The project does not combine footprint datasets. Every published product was built from one source, read as-is. The only footprints it reads are the Overture Maps buildings theme, latest release, for the AOI. Overture already conflates OpenStreetMap with machine-learned footprints (Microsoft, Google Open Buildings and others) and publishes the result with a per-feature source and update date, so the merge, de-duplication and source priority are Overture's, not this project's.
 
 Those footprints are used twice: as training labels (rasterised to building-cover fraction, step 4 below) and as the footprint baseline that each product dates by season (`footprints_age`). Google Open Buildings Temporal and WSF Tracker are only benchmarks; they are never merged into the labels, so the comparison against them stays independent.
 
-A separate merge step was not needed for labels: a pixel counts as built-up at 25% building cover and as not built only beyond 40 m from any footprint, which tolerates the offsets and partial duplicates that conflation resolves. A conflated set with more complete coverage (for example one that adds a height-bearing dataset to fill gaps) can still help as a footprint baseline, and is a planned input.
+A separate merge step was not needed for labels: a pixel counts as built-up at 25% building cover and as not built only beyond 40 m from any footprint, which tolerates the offsets and partial duplicates that conflation resolves.
+
+A request can replace Overture with its own footprint file (`"options": {"footprints": "path/to/footprints.gpkg"}`), for example a conflated set that someone else has produced. That file is then used for both labels and dating, unchanged. None of the published products use this option yet.
+
+![From footprints to labels to a built-up probability](docs/assets/method_labels.jpg)
+
+*Malakal, 1.4 km window. Left: Overture footprints (yellow) over the 2026 dry-season Sentinel-2 composite. Centre: the labels drawn from them; most of the town is ignored because it is neither covered by a footprint nor far from one. Right: the probability the model assigns after training on those labels.*
 
 ## Pipeline
 
@@ -57,6 +65,10 @@ The classifier is supervised, but nobody draws labels: they come automatically f
 WSF products use the same family of model: WSF 2019 is a Random Forest on Sentinel-1 and Sentinel-2 temporal features, trained once for the globe (Marconcini et al.). The WSF Tracker data are public on Source Cooperative; its processing code is not published. The difference here is not the algorithm but where it is trained (on each request's own footprints), when it runs (on request, up to the latest pass) and what ships with it (accuracy and benchmarks for that area).
 
 ## Benchmarks run with every product
+
+![This product and WSF Tracker: new built-up in Malakal](docs/assets/method_vs_wsf.jpg)
+
+*New built-up in Malakal from the 2019 dry season to January 2026. Both products put the town in the same place, but they mark mostly different pixels as new: green is where they agree. The orange lines along the eastern road and the riverbank are likely bright bare ground read as built-up. The purple specks are scattered single-pixel WSF Tracker detections, which this product's 0.1 ha minimum cluster size would remove.*
 
 - **WSF Tracker.** Built-up extent at the last composite window ending by March 2026, against WSF epochs up to that window's end date, and new built-up between the first window and the same matched date, pixel by pixel with a one-pixel tolerance.
 - **Google Open Buildings 2.5D Temporal.** New built-up between the first window's year and 2023 (presence rising from below 0.3 to at least 0.5).
@@ -90,6 +102,10 @@ The product measures built-up surface in hectares, but two of its outputs transl
 
 - **Building counts.** `footprints_age` gives each footprint the season in which its pixel first read as built-up, so growth can be counted in buildings against a citywide footprint baseline. Over the Malakal request area, 618 of the 18,519 Overture footprints sit in pixels first read as built-up in a dry season from 2020 to 2026, and 178 more only in the provisional 2026 rainy-season window.
 - **Areas the footprint baseline misses.** New built-up with no footprint under it is reported as `n_unmapped_gain_ha`: 234 ha of the 243 ha confirmed new built-up in the Malakal request area. That is either growth the footprint maps have not caught up with or a false detection (bright bare ground is the known one), and either way it is where imagery should be checked first. Intersecting the gain polygons with the footprints gives its extent, so it can be expressed as square kilometres of imagery to task.
+
+![Footprints dated by season, and new built-up with no footprint](docs/assets/method_footprints.jpg)
+
+*Malakal, 700 m window. Footprints are filled with the dry season in which their pixel first read as built-up; red outlines are footprints the model never read as built-up (often isolated small structures). Pink is new built-up with no footprint: some of it is new building the footprint map does not have yet, and some is bare ground. Telling them apart needs higher-resolution imagery, which is why these areas are reported as places to check, not as buildings.*
 
 ## Cost per request
 

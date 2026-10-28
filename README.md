@@ -1,6 +1,8 @@
 # builtup-mcp
 
-**Built-up change, on demand.** Ask for any city or area, any years, and get back where new built-up appeared, the dry season it first showed up in, how accurate the result is for that place, and how it compares with the published global layers. Everything runs on open data, and results are delivered as a standard STAC item.
+**Built-up change, on demand.** Ask for any city or area, any years, and get back where new built-up appeared, the dry season it first showed up in, how well the result agrees with that place's mapped buildings, and how it compares with the published global layers. Everything runs on open data, and results are delivered as a standard STAC item.
+
+> **Proof of concept.** This project demonstrates one idea: that built-up change can be produced on request and served to AI agents through the [Model Context Protocol](https://modelcontextprotocol.io). It is not a production or validated method, and its figures are not comparable with validated products. Every check so far is agreement with other models' outputs, not accuracy against ground truth. See [Limitations](#limitations).
 
 [![New built-up in Malakal, South Sudan, by dry season 2020-2026](docs/assets/malakal_change.jpg)](https://cgiovando.github.io/builtup-mcp/)
 
@@ -149,6 +151,7 @@ The two products agree on where the towns are and on the trend of growth, but mu
 
 ## Limitations
 
+- A proof of concept, not a validated product: no independent reference sample has been used yet, and agreement with WSF Tracker on which pixels are new is low (0.2 to 0.5 F1).
 - 10 m built-up surface, not individual buildings; small shelters are detected as clusters.
 - Bright bare ground can read as built-up, so some early construction is missed.
 - Labels come from footprint maps, so held-out scores measure consistency with mapped buildings, not ground truth.

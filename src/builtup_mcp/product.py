@@ -12,7 +12,7 @@ Layout under ``PRODUCTS_DIR`` (a self-contained STAC catalog)::
     builtup-change/<item-id>/footprints_age.parquet    footprints with first-detected window
     builtup-change/<item-id>/summary.json              provenance, accuracy, static comparison
 
-Any STAC client (QGIS, pystac, rstac, a STAC browser, DDH) can read it, and
+Any STAC client (QGIS, pystac, rstac, a STAC browser, a data catalog) can read it, and
 the folder can be synced to object storage unchanged.
 """
 

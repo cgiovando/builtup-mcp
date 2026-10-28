@@ -52,7 +52,7 @@ A request is a small JSON file. This one compares the December-March dry season 
 }
 ```
 
-The AOI can also be a GeoJSON geometry (`"geometry"`) or a file (`"path"`), and `options.footprints` can point to your own footprint file to use as labels and to receive the age attribute.
+The AOI can also be a GeoJSON geometry (`"geometry"`) or a file (`"path"`), and `options.footprints` can point to your own footprint file (for example a conflated set) to use as labels and to receive the age attribute. The published products all use Overture.
 
 The run prints a summary like this one (Malakal, 22 Oct 2026):
 
@@ -91,7 +91,7 @@ The same capabilities are exposed as [Model Context Protocol](https://modelconte
 | --- | --- |
 | `plan_city_request` | Expand a request into seasonal windows and count Sentinel-1/-2 scenes per window |
 | `run_city_request` | Produce the change product and add it to the local STAC catalog |
-| `list_products`, `get_product_summary` | Browse products: areas, accuracy, data gaps, static-layer comparison |
+| `list_products`, `get_product_summary` | Browse products: areas, held-out agreement, data gaps, static-layer comparison |
 | `rank_neighbourhoods` | Rank H3 cells of a product by new built-up or growth |
 | `compare_products` | Rank city products by growth per year |
 | `static_layers_report` | Newest epoch and built-up area of open static layers over a bbox |
@@ -103,18 +103,18 @@ The same capabilities are exposed as [Model Context Protocol](https://modelconte
 flowchart LR
     R[Request<br/>AOI, years, season] --> C[Seasonal composites<br/>Sentinel-2 medians<br/>Sentinel-1 statistics]
     F[Overture footprints<br/>via STAC] --> M
-    C --> M[Per-request model<br/>held-out accuracy]
+    C --> M[Per-request model<br/>held-out agreement]
     M --> T[Season of change<br/>dead band, flicker and road filters]
     T --> P[STAC item<br/>COG, GeoParquet, H3, summary]
     W[WSF Tracker<br/>Open Buildings<br/>static layers] --> B[Benchmarks] --> P
 ```
 
 1. **Composites.** For each season, the clearest Sentinel-2 scenes are cloud-masked and reduced to a per-band median, with the 2022 processing-baseline offset removed. Sentinel-1 acquisitions from one orbit direction give the median and temporal spread of backscatter, which separates stable built structures from bare soil.
-2. **Per-request model.** Open footprints become labels: built-up where buildings cover at least a quarter of a 10 m pixel, not built-up more than 40 m from any footprint. A gradient-boosted classifier is trained on samples pooled across all seasons, with fused, optical-only and radar-only variants, so cloud gaps and Sentinel-1 gaps degrade the product instead of stopping it. Accuracy is measured on spatially held-out 500 m blocks.
+2. **Per-request model.** Open footprints become labels: built-up where buildings cover at least a quarter of a 10 m pixel, not built-up more than 40 m from any footprint. A gradient-boosted classifier is trained on samples pooled across all seasons, with fused, optical-only and radar-only variants, so cloud gaps and Sentinel-1 gaps degrade the product instead of stopping it. Agreement with the footprint labels is measured on spatially held-out 500 m blocks.
 3. **Season of change.** New built-up is dated to the first built season after the last not-built season. Isolated pixels and thin road-like features are removed. The off-season rolling window only adds provisional detections.
 4. **Delivery.** A STAC item in a self-contained catalog, readable from QGIS, Python, R, Databricks or any STAC client.
 
-The model is supervised but needs no hand labelling, and it is the same family as the WSF classifiers (tree ensembles on Sentinel-1 and Sentinel-2 features); what differs is that it is trained on each request's own footprints and ships with that area's accuracy. Footprints come from Overture alone, which already conflates OpenStreetMap with machine-learned footprints; the project adds no conflation step of its own. Inputs are free, and a first run takes 8.5 to 12 minutes on a laptop, under $0.10 of cloud compute.
+The model is supervised but needs no hand labelling, and it is the same family as the WSF classifiers (tree ensembles on Sentinel-1 and Sentinel-2 features); what differs is that it is trained on each request's own footprints and ships with agreement scores and benchmarks for that area. Footprints come from Overture alone, which already conflates OpenStreetMap with machine-learned footprints; the project adds no conflation step of its own. Inputs are free, and a first run takes 8.5 to 12 minutes on a laptop, under $0.10 of cloud compute.
 
 Full detail, including the models considered, the benchmarks, the cost and the limitations, is in **[METHODOLOGY.md](METHODOLOGY.md)**.
 
@@ -133,7 +133,7 @@ products/
       h3_stats.parquet / .geojson             per-hexagon built-up and growth (H3 res 8)
       footprints_age.parquet                  footprints with the season they first read as built-up
       quicklook_*.png, built_*.png            per-season imagery and masks
-      summary.json                            provenance, accuracy, benchmarks, static-layer ages
+      summary.json                            provenance, held-out scores, benchmarks, static-layer ages
 ```
 
 ## Results so far
@@ -146,6 +146,8 @@ products/
 | Agreement with WSF Tracker on built-up extent (F1) | 0.76 | 0.88 | 0.97 | 0.96 |
 | Agreement with WSF Tracker on which pixels are new (F1) | 0.21 | 0.36 | 0.42 | 0.49 |
 
+The Malakal request area (106 sq km, `requests/malakal_request_aoi.json`) gives 849 to 1,092 ha, 243 ha new and WSF Tracker extent agreement 0.73.
+
 In Renk, the border town where more than 800,000 people crossed from Sudan from April 2023 ([REACH, July 2025](https://repository.impact-initiatives.org/document/repository/8d39fa52/REACH_SSD_Brief_Renk-Emergency-Assessment_July-2025.pdf)), two-thirds of the new built-up first appears in the 2024-2026 dry seasons.
 
 The two products agree on where the towns are and on the trend of growth, but much less on which pixels are new. In Malakal, image checks found errors on both sides. That is why a reference sample from very-high-resolution imagery is the next step, not a claim that either product is right.
@@ -154,7 +156,8 @@ The two products agree on where the towns are and on the trend of growth, but mu
 
 - A proof of concept, not a validated product: no independent reference sample has been used yet, and agreement with WSF Tracker on which pixels are new is low (0.2 to 0.5 F1).
 - 10 m built-up surface, not individual buildings; small shelters are detected as clusters.
-- Bright bare ground can read as built-up, so some early construction is missed.
+- Bright bare ground can read as built-up, so construction on cleared ground can be dated too early or missed.
+- The date is the season built-up was first seen, not a building's construction date; anything built before 2019 has no date.
 - Labels come from footprint maps, so held-out scores measure consistency with mapped buildings, not ground truth.
 - No independent reference after January 2026; Sentinel-1 backscatter only, no coherence.
 - Depends on Microsoft Planetary Computer for Sentinel data; the STAC reader can be pointed at another catalog.
@@ -165,6 +168,7 @@ The two products agree on where the towns are and on the trend of growth, but mu
 uv run pytest -q -m "not network"         # offline tests
 uv run pytest -q -m network               # live checks against the data providers
 uv run python scripts/export_pages.py     # refresh the GitHub Pages explorer from local products
+uv run python scripts/make_doc_figures.py # redraw the METHODOLOGY.md figures from the Malakal product
 ```
 
 ## AI-assisted development

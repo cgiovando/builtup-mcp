@@ -111,7 +111,9 @@ flowchart LR
 3. **Season of change.** New built-up is dated to the first built season after the last not-built season. Isolated pixels and thin road-like features are removed. The off-season rolling window only adds provisional detections.
 4. **Delivery.** A STAC item in a self-contained catalog, readable from QGIS, Python, R, Databricks or any STAC client.
 
-Full detail, including the benchmarks and limitations, is in **[METHODOLOGY.md](METHODOLOGY.md)**.
+The model is supervised but needs no hand labelling, and it is the same family as the WSF classifiers (tree ensembles on Sentinel-1 and Sentinel-2 features); what differs is that it is trained on each request's own footprints and ships with that area's accuracy. Footprints come from Overture alone, which already conflates OpenStreetMap with machine-learned footprints; the project adds no conflation step of its own. Inputs are free, and a first run takes 8.5 to 12 minutes on a laptop, under $0.10 of cloud compute.
+
+Full detail, including the models considered, the benchmarks, the cost and the limitations, is in **[METHODOLOGY.md](METHODOLOGY.md)**.
 
 ## What a product contains
 

@@ -24,6 +24,14 @@
 
 All reads are anonymous; no credentials are required.
 
+## Reference footprints: one source, no conflation step
+
+The project does not combine footprint datasets itself. The only footprints it reads are the Overture Maps buildings theme, latest release, for the AOI. Overture already conflates OpenStreetMap with machine-learned footprints (Microsoft, Google Open Buildings and others) and publishes the result with a per-feature source and update date, so the merge, de-duplication and source priority are Overture's, not this project's.
+
+Those footprints are used twice: as training labels (rasterised to building-cover fraction, step 4 below) and as the footprint baseline that each product dates by season (`footprints_age`). Google Open Buildings Temporal and WSF Tracker are only benchmarks; they are never merged into the labels, so the comparison against them stays independent.
+
+A separate merge step was not needed for labels: a pixel counts as built-up at 25% building cover and as not built only beyond 40 m from any footprint, which tolerates the offsets and partial duplicates that conflation resolves. A conflated set with more complete coverage (for example one that adds a height-bearing dataset to fill gaps) can still help as a footprint baseline, and is a planned input.
+
 ## Pipeline
 
 1. **Request and windows.** A request gives a bbox or polygon, a year range and `season_months`. One composite window is built per year over the same calendar months (for example December-March, the dry season in South Sudan), so seasonal vegetation and soil moisture are not mistaken for change. An optional rolling window covers the last N days to give the latest picture.
@@ -33,6 +41,20 @@ All reads are anonymous; no credentials are required.
 5. **Held-out accuracy.** Before the final fit, 20% of 500 m spatial blocks are withheld and the model is scored on them at the product's own built-up threshold (p >= 0.6), with the share of pixels falling in the dead band reported alongside. Because the labels come from incomplete footprint maps, this measures agreement with mapped buildings, not ground truth.
 6. **Epoch of change.** Each window's probability becomes a state with a dead band: built (p >= 0.6), not built (p <= 0.35) or unknown. A pixel's gain is dated to the first built window after its last not-built window. This rule is persistent by construction (after the gain the pixel is never again observed as not built) and needs no tuning. Isolated pixels, clusters under 10 pixels (0.1 ha) and linear features under 30 m wide (mostly graded roads) are removed. The rolling latest window (and a current season clipped to today) is kept out of change dating, so it cannot erase gains confirmed in earlier seasons; it only adds provisional detections, because it is usually off-season or thinly observed. Loss (the mirror rule) is available on request and is experimental.
 7. **Products.** Built-up probability per window (multi-band COG), gain epoch (COG), new built-up polygons with first-seen window, area and confidence (GeoParquet and GeoJSON), H3 resolution-8 neighbourhood statistics, the footprints with the window in which each first read as built-up, the static-layer comparison, the benchmark, and a `summary.json` holding provenance (scene ids per window, Overture release, model and thresholds). A STAC item ties them together.
+
+## Model choice
+
+The classifier is supervised, but nobody draws labels: they come automatically from the AOI's own open footprints, so a new city needs no annotation.
+
+| Option considered | Outcome |
+| --- | --- |
+| Fixed index thresholds (NDBI and VV backscatter), the v0.1 method | Replaced. No training, but thresholds tuned on one city do not transfer, and requiring both sensors capped recall at 13-44% (see [Version 0.1 validation](#version-01-validation-kept-for-reference)). |
+| Off-the-shelf global built-up classifiers (Dynamic World built class, EMC-BUILT, WSF) | Used as comparisons, not as the engine. They are fixed products or models: optical only (Dynamic World), biennial (EMC-BUILT) or published on the producer's schedule (WSF Tracker), and none reports accuracy for the requested city. |
+| Deep segmentation or fine-tuned EO foundation models (Prithvi, DOFA via TerraTorch) | Not used yet. They need a GPU and fine-tuning per region; the gain over hand-made features at 10 m has not been shown for this task. |
+| Foundation-model embeddings as features (OlmoEarth) | Next experiment ([#7](https://github.com/cgiovando/builtup-mcp/issues/7)): replace the hand-made features in step 3, keep the per-request classifier and its accuracy reporting. |
+| **Gradient-boosted trees trained per request** (scikit-learn `HistGradientBoostingClassifier`) | **Used.** Trains in seconds on a laptop CPU, is fitted in fused, optical-only and radar-only variants so data gaps degrade the product instead of stopping it, and gives a held-out accuracy for the place requested. |
+
+WSF products use the same family of model: WSF 2019 is a Random Forest on Sentinel-1 and Sentinel-2 temporal features, trained once for the globe (Marconcini et al.). The WSF Tracker data are public on Source Cooperative; its processing code is not published. The difference here is not the algorithm but where it is trained (on each request's own footprints), when it runs (on request, up to the latest pass) and what ships with it (accuracy and benchmarks for that area).
 
 ## Benchmarks run with every product
 
@@ -53,11 +75,32 @@ Dry-season composites, 2019 to 2026. Agreement is pixel F1 with a one-pixel tole
 | Held-out F1 vs footprint labels (fused model) | 0.91 | 0.96 | 0.96 | 0.97 |
 | WSF Tracker: extent agreement | 0.76 | 0.88 | 0.97 | 0.96 |
 | WSF Tracker: new built-up, ours / WSF (ha) and agreement | 148 / 96, 0.21 | 268 / 53, 0.36 | 620 / 169, 0.42 | 210 / 108, 0.49 |
+| Open Buildings Temporal: new built-up 2019-2023, ours / OB (ha) and agreement | 66 / 7, 0.07 | 86 / 5, 0.04 | 373 / 175, 0.20 | 140 / 82, 0.24 |
 | Seasons without usable Sentinel-1 | 2022-2025 | 2022-2025 | none | none |
 
 Both products find the towns in the same place and show similar growth trends, but they rarely flag the same pixels as new. In Malakal, image checks found errors on both sides: WSF Tracker caught a new shelter block by the river that this product had already scored as built-up in 2019 (bright bare ground), and this product caught dispersed infill that WSF Tracker missed. Settling which is right needs an independent reference sample.
 
+Open Buildings Temporal sees very little new building in the South Sudan towns (5-7 ha), because it measures roof presence at about 4 m and small tukuls and shelters rarely reach its 0.5 presence threshold; agreement there says more about the reference than about this product.
+
 Static layers over the same areas (newest epoch, ha built): Malakal 254 (ESA WorldCover 2021), 45 (Open Buildings 2023), 905 (Esri / Impact Observatory 2023), 712 (WSF Tracker Jan 2026). They answer different questions (roof presence, land-cover class, settlement extent) at different dates.
+
+## Reporting growth in buildings and in areas to check
+
+The product measures built-up surface in hectares, but two of its outputs translate it into the units that building-inventory work reports:
+
+- **Building counts.** `footprints_age` gives each footprint the season in which its pixel first read as built-up, so growth can be counted in buildings against a citywide footprint baseline. Over the Malakal request area, 618 of the 18,519 Overture footprints sit in pixels first read as built-up in a dry season from 2020 to 2026, and 178 more only in the provisional 2026 rainy-season window.
+- **Areas the footprint baseline misses.** New built-up with no footprint under it is reported as `n_unmapped_gain_ha`: 234 ha of the 243 ha confirmed new built-up in the Malakal request area. That is either growth the footprint maps have not caught up with or a false detection (bright bare ground is the known one), and either way it is where imagery should be checked first. Intersecting the gain polygons with the footprints gives its extent, so it can be expressed as square kilometres of imagery to task.
+
+## Cost per request
+
+All inputs are open and read anonymously, so the cost of a request is compute time. Measured run times (`runtime_s` in each product's `summary.json`) on a 10-core laptop with 16 GB of memory, for areas of 66 to 106 sq km and eight dry seasons from 2019 to 2026:
+
+| Run | Time |
+| --- | --- |
+| First run, composites built from scratch (Renk, Malakal request area, Kigali) | 8.5 to 12 minutes |
+| Re-run with cached composites (Malakal, Juba) | 1 to 2 minutes |
+
+On a general-purpose cloud VM of similar size (8 vCPU, 32 GB, about $0.40 an hour on demand), a first run costs under $0.10 in compute; a city request costs well under $1 even with several re-runs. The costs that matter are elsewhere: a very-high-resolution reference sample to validate the figures, and analyst time to review them.
 
 ## Version 0.1 validation (kept for reference)
 
@@ -74,7 +117,10 @@ Recall was structurally limited by the fixed both-sensors rule, which motivated 
 
 ## Limitations
 
-- **Labels are footprints, not ground truth.** Where footprint maps are sparse or old, the classifier learns from what is mapped. Held-out scores measure consistency with those maps.
+- **Labels are footprints, not ground truth.** Where footprint maps are sparse or old, the classifier learns from what is mapped. Held-out scores measure consistency with those maps, and the labels inherit Overture's coverage and its choice between overlapping sources.
+- **No independent accuracy yet.** Every benchmark so far is against another model's output. Agreement on extent is high (0.73 to 0.97 F1), agreement on which pixels are new is low (0.15 to 0.49), and only a very-high-resolution reference sample can say which product is right where they differ ([#1](https://github.com/cgiovando/builtup-mcp/issues/1)).
+- **Season of first detection, not building age.** A gain is dated to the first composite window that reads it as built-up; structures that predate 2019 have no age, and a building replaced in place is not a gain.
+- **Bright bare ground.** Graded plots, dry riverbanks and some wetlands can read as built-up ([#2](https://github.com/cgiovando/builtup-mcp/issues/2)).
 - **10 m, not buildings.** The signal is built-up surface at 10 m, suited to neighbourhood and block scale. Individual small structures (for example tukuls or shelters) are detected as clusters, not counted.
 - **Season.** Comparisons are only as clean as the season choice. Off-season windows (wet season, flooding) change surface reflectance and backscatter; gains first seen there are provisional.
 - **Sentinel-1 gaps.** After Sentinel-1B failed in December 2021, parts of Africa had few or no acquisitions until Sentinel-1C (2025). Those windows are scored optical-only and flagged.
